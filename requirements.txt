@@ -3,3 +3,5 @@ pandas
 jupyter
 matplotlib
 scikit-learn
+tensorflow
+PyYAML
