@@ -4,25 +4,27 @@ from sklearn.metrics import mean_squared_error
 import matplotlib.pyplot as plt
 import tensorflow as tf
 from src.loadData import getData
+from src.preprocessing import preprocessing
 
 with open('../params.yaml', 'r') as file:
     param = yaml.safe_load(file)
+    preprocessingParam = param['preprocessing']
 
 def evaluateDNNModel(path):
     loaded_model = tf.keras.models.load_model(path)
-    xTest, yTest, xTrain, yTrain = getData(param['dataset'], param['test_size'])
+    xTest, yTest, xTrain, yTrain = preprocessing(getData(param['dataset']), **preprocessingParam)
     predictedLabels = loaded_model.predict(xTest)
     evaluateModel(predictedLabels)
 
 def evaluateXGBModel(path):
     loaded_model = xgb.XGBRegressor()
     loaded_model.load_model(path)
-    xTest, yTest, xTrain, yTrain = getData(param['dataset'], param['test_size'])
+    xTest, yTest, xTrain, yTrain = preprocessing(getData(param['dataset']), **preprocessingParam)
     predictedLabels = loaded_model.predict(xTest)
     evaluateModel(predictedLabels)
 
 def evaluateModel(predictedLabels):
-    xTest, yTest, xTrain, yTrain = getData(param['dataset'], param['test_size'])
+    xTest, yTest, xTrain, yTrain = preprocessing(getData(param['dataset']), **preprocessingParam)
     mse = mean_squared_error(yTest.to_numpy(), predictedLabels)
     print(f'MSE is {mse}')
     plot(yTest,predictedLabels)

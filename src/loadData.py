@@ -78,16 +78,8 @@ def mergeHolidayAndLoadCurve(holiday, loadCurveOne):
     return merged_df
 
 
-def splitData(data, target, test_size=0.2):
-    train_df = data.head( int(len(data) * (1-test_size)))
-    test_df = data.tail( int( len(data) * (test_size)))
-    xTest = test_df.drop(target, axis=1)
-    yTest = test_df[target]
-    xTrain = train_df.drop(target, axis=1)
-    yTrain = train_df[target]
-    return xTest, yTest , xTrain , yTrain
 
-def getData(dataset, test_size=0.2):
+def getData(dataset):
     if dataset == 'loadCurveOne':
         loadCurve = readLoadCurveOnetToDataframe("../data/training_data_period_1.csv")
     elif dataset == 'loadCurveTwo':
@@ -99,4 +91,4 @@ def getData(dataset, test_size=0.2):
     holiday = readHolidayToDataframe("../data/holiday.csv")
     data = mergeHolidayAndLoadCurve(holiday, loadCurve)
     data['electricLoad'] = data['electricLoad'].astype(float)
-    return splitData(data,'electricLoad',test_size)
+    return data

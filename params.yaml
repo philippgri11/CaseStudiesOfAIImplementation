@@ -1,5 +1,4 @@
 dataset : 'loadCurveTwo'
-test_size : 0.2
 XGBRegressor_model_params:
   n_estimators: 1500
   max_depth: 6
@@ -17,3 +16,8 @@ DNN_model_params:
   optimizer: 'adam'
   loss: 'mse'
   activation: 'relu'
+preprocessing:
+  test_size: 0.2
+  colums: [ 't1' ,'t2', 'r1','r2']
+  shifts: 3
+  negShifts: -3

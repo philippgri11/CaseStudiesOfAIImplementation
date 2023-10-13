@@ -1,24 +1,26 @@
 import os
 from datetime import datetime
-
 import xgboost as xgb
 import yaml
 from sklearn.metrics import make_scorer
+from sklearn.experimental import enable_halving_search_cv
 from sklearn.model_selection import HalvingGridSearchCV
 from sklearn.metrics import mean_squared_error
 import tensorflow as tf
-from tensorflow.keras import optimizers, models, layers
-from tensorflow.keras.optimizers.schedules import ExponentialDecay
-from src.loadData import splitData, readLoadCurveOnetToDataframe, getData
+
+from src.evaluation import evaluateXGBModel
+from src.loadData import readLoadCurveOnetToDataframe, getData
+from src.preprocessing import preprocessing
 
 with open('../params.yaml', 'r') as file:
     param = yaml.safe_load(file)
     XGBRegressorModelParams = param['XGBRegressor_model_params']
     DNNModelParams = param['DNN_model_params']
+    preprocessingParam = param['preprocessing']
 
 def trainXGBRegressor():
-    xTest, yTest, xTrain, yTrain = getData(param['dataset'], param['test_size'])
-
+    data = getData(param['dataset'])
+    xTest, yTest, xTrain, yTrain = preprocessing(data, **preprocessingParam)
     # define model
     model = xgb.XGBRegressor(**XGBRegressorModelParams)
     model.fit(xTrain, yTrain, verbose=True, eval_set=[(xTest, yTest)])
@@ -96,3 +98,7 @@ def trainDNN():
     path = getPath()
     model.save(path)
     return path
+
+
+if __name__ == "__main__":
+    path = trainXGBRegressor()
