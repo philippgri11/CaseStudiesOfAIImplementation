@@ -49,7 +49,6 @@ def dateToFloat(df, cols):
         df[f'{col}_day'] = df[col].dt.day
         df[f'{col}_hour'] = df[col].dt.hour
         df[f'{col}_minute'] = df[col].dt.minute
-        df[f'{col}_second'] = df[col].dt.second
 
     # Remove original date/time columns
     df.drop(cols, axis=1, inplace=True)
@@ -72,6 +71,7 @@ def mergeHolidayAndLoadCurve(holiday, loadCurveOne):
         how='inner'
     )
     merged_df.drop('date_year', axis=1, inplace=True)
+    # merged_df.drop('startDate_year', axis=1, inplace=True)
     merged_df.drop('date_month', axis=1, inplace=True)
     merged_df.drop('date_day', axis=1, inplace=True)
 

@@ -10,6 +10,7 @@ def slidingWindow(df, colums, shifts, negShifts):
         for negShift in range(negShifts,0):
             for col in colums:
                 df[col + str(negShift)] = df[col].shift(negShift)
+    df = df.dropna()
     return df
 
 

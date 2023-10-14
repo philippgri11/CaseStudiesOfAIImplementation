@@ -5,10 +5,23 @@ import matplotlib.pyplot as plt
 import tensorflow as tf
 from src.loadData import getData
 from src.preprocessing import preprocessing
+import joblib
 
 with open('../params.yaml', 'r') as file:
     param = yaml.safe_load(file)
     preprocessingParam = param['preprocessing']
+
+def evaluateKNeighbors(path):
+    loaded_model = joblib.load(path)
+    xTest, yTest, xTrain, yTrain = preprocessing(getData(param['dataset']), **preprocessingParam)
+    predictedLabels = loaded_model.predict(xTest)
+    evaluateModel(predictedLabels)
+
+def evaluateARDModel(path):
+    loaded_model = joblib.load(path)
+    xTest, yTest, xTrain, yTrain = preprocessing(getData(param['dataset']), **preprocessingParam)
+    predictedLabels = loaded_model.predict(xTest)
+    evaluateModel(predictedLabels)
 
 def evaluateDNNModel(path):
     loaded_model = tf.keras.models.load_model(path)

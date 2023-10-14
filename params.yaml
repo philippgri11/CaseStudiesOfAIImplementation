@@ -1,6 +1,6 @@
-dataset : 'loadCurveTwo'
+dataset : 'loadCurveThree'
 XGBRegressor_model_params:
-  n_estimators: 1500
+  n_estimators: 2000
   max_depth: 6
   learning_rate: 0.005
   colsample_bytree: 0.9
@@ -18,6 +18,6 @@ DNN_model_params:
   activation: 'relu'
 preprocessing:
   test_size: 0.2
-  colums: [ 't1' ,'t2', 'r1','r2']
+  colums: [ 't1' , 'r1']
   shifts: 3
   negShifts: -3
