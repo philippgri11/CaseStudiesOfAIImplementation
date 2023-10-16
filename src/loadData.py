@@ -71,7 +71,7 @@ def mergeHolidayAndLoadCurve(holiday, loadCurveOne):
         how='inner'
     )
     merged_df.drop('date_year', axis=1, inplace=True)
-    # merged_df.drop('startDate_year', axis=1, inplace=True)
+    merged_df.drop('startDate_year', axis=1, inplace=True)
     merged_df.drop('date_month', axis=1, inplace=True)
     merged_df.drop('date_day', axis=1, inplace=True)
 
