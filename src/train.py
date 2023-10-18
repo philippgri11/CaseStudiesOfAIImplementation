@@ -7,20 +7,23 @@ import yaml
 from sklearn.linear_model import ARDRegression, BayesianRidge
 from sklearn.metrics import make_scorer
 from sklearn.metrics import mean_squared_error
+from sklearn.experimental import enable_halving_search_cv
 from sklearn.model_selection import HalvingGridSearchCV
 from sklearn.neighbors import KNeighborsRegressor
 from wandb.integration.xgboost import WandbCallback
 import wandb
-from src.evaluation import evaluateXGBModel
+from src.evaluation import evaluateXGBModel, evaluateLSTMModel
 from src.loadData import getData
-from src.preprocessing import preprocessing
+from src.preprocessing import preprocessing, preprocessingLSTM
 from src.sweep_config import sweep_id
+from wandb.keras import WandbCallback
 
 with open('../params.yaml', 'r') as file:
     param = yaml.safe_load(file)
     XGBRegressorModelParams = param['XGBRegressorModelParams']
     DNNModelParams = param['DNN_model_params']
     preprocessingParam = param['preprocessing']
+    LSTMpreprocessing = param['LSTMpreprocessing']
 
 
 def get_value(key, group):
@@ -120,30 +123,59 @@ def trainXGBRegressorHP():
 
 
 def trainDNN():
-    data = getData(param['dataset'])
-    xTest, yTest, xTrain, yTrain = preprocessing(data, **preprocessingParam)
-    model = tf.keras.models.Sequential([
-        tf.keras.layers.Input(shape=(12,), name='input_layer'),
-        tf.keras.layers.Dense(32, activation=DNNModelParams['activation']),
-        tf.keras.layers.Dense(64, activation=DNNModelParams['activation']),
-        tf.keras.layers.Dense(64, activation=DNNModelParams['activation']),
-        tf.keras.layers.Dense(128, activation=DNNModelParams['activation']),
-        tf.keras.layers.Dense(64, activation=DNNModelParams['activation']),
-        tf.keras.layers.Dense(32, activation=DNNModelParams['activation']),
-        tf.keras.layers.Dense(16, activation=DNNModelParams['activation']),
-        tf.keras.layers.Dense(1, activation=DNNModelParams['activation'])
-    ])
-    model.compile(optimizer=DNNModelParams['optimizer'],
-                  loss=DNNModelParams['loss'])
+    with wandb.init(project='CaseStudiesOfAIImplementation', entity='philippgrill') as run:
+        data = getData(param['dataset'])
+        xTest, yTest, xTrain, yTrain = preprocessing(data, **preprocessingParam)
+        model = tf.keras.models.Sequential([
+            tf.keras.layers.Input(shape=(12,), name='input_layer'),
+            tf.keras.layers.Dense(32, activation=DNNModelParams['activation']),
+            tf.keras.layers.Dense(64, activation=DNNModelParams['activation']),
+            tf.keras.layers.Dense(64, activation=DNNModelParams['activation']),
+            tf.keras.layers.Dense(128, activation=DNNModelParams['activation']),
+            tf.keras.layers.Dense(64, activation=DNNModelParams['activation']),
+            tf.keras.layers.Dense(32, activation=DNNModelParams['activation']),
+            tf.keras.layers.Dense(16, activation=DNNModelParams['activation']),
+            tf.keras.layers.Dense(1, activation=DNNModelParams['activation'])
+        ])
+        model.compile(optimizer=DNNModelParams['optimizer'],
+                      loss=DNNModelParams['loss'])
 
-    model.fit(xTrain, yTrain, epochs=DNNModelParams['epochs'], batch_size=DNNModelParams['batch_size'],
-              validation_data=(xTest, yTest))
-    evaluation = model.evaluate(xTest, yTest)
-    print(f'Evaluation Loss: {evaluation}')
-    path = getPath()
-    model.save(path)
-    return path
+        model.fit(xTrain, yTrain, epochs=DNNModelParams['epochs'], batch_size=DNNModelParams['batch_size'],
+                  validation_data=(xTest, yTest), callbacks=[WandbCallback()])
+        evaluation = model.evaluate(xTest, yTest)
+        print(f'Evaluation Loss: {evaluation}')
+        path = getPath()
+        model.save(path)
+        return path
 
+
+def trainLSTM():
+    with wandb.init(project='CaseStudiesOfAIImplementation', entity='philippgrill') as run:
+        now = datetime.now()
+        run.name = now.strftime("%d%m%Y%H%M%S")
+        data = getData(param['dataset'])
+        xTest, yTest, xTrain, yTrain = preprocessingLSTM(data, **LSTMpreprocessing)
+        n_timesteps, n_features = xTrain.shape[1], xTrain.shape[2]
+        model = tf.keras.models.Sequential([
+            tf.keras.layers.LSTM(64, input_shape=(n_timesteps, n_features), return_sequences=True),
+            tf.keras.layers.Dropout(0.2),
+            tf.keras.layers.LSTM(32),
+            tf.keras.layers.Dropout(0.2),
+            tf.keras.layers.Dense(1)
+        ])
+
+        model.compile(optimizer=tf.keras.optimizers.Adam(learning_rate=0.001),
+                      loss=tf.keras.losses.Huber(),
+                      metrics="mae")
+
+        model.fit(xTrain, yTrain, epochs=DNNModelParams['epochs'], batch_size=DNNModelParams['batch_size'],
+                  validation_data=(xTest, yTest), callbacks=[WandbCallback()])
+        evaluation = model.evaluate(xTest, yTest)
+        print(f'Evaluation Loss: {evaluation}')
+        path = getPath()
+        model.save(path)
+        evaluateLSTMModel(model=model)
+        return path
 
 def trainARDRegressor():
     print(param)
@@ -246,5 +278,6 @@ def trainKNeighborsRegressorHP():
 
 
 if __name__ == "__main__":
-    wandb.agent(sweep_id, trainXGBRegressor)
-    trainXGBRegressor()
+    # wandb.agent(sweep_id, trainXGBRegressor)
+    trainLSTM()
+    # evaluateLSTMModel("..\models\model_2023-10-17_21-43-29.json")
