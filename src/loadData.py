@@ -42,14 +42,14 @@ def readHolidayToDataframe(file_path, sep=';'):
     return df.dropna()
 
 def dateToFloat(df, cols):
-    # Split columns 'startDate' and 'endDate' into numeric characteristics
+    # Split columns 'startDate' into numeric characteristics adds dayofweek
     for col in cols:
+        df['dayofweek'] = df[col].dt.dayofweek
         df[f'{col}_year'] = df[col].dt.year
         df[f'{col}_month'] = df[col].dt.month
         df[f'{col}_day'] = df[col].dt.day
         df[f'{col}_hour'] = df[col].dt.hour
         df[f'{col}_minute'] = df[col].dt.minute
-
     # Remove original date/time columns
     df.drop(cols, axis=1, inplace=True)
     return df

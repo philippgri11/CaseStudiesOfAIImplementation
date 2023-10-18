@@ -40,7 +40,6 @@ def splitData(data, target, test_size=0.2):
     yTrain = train_df[target]
     return xTest, yTest, xTrain, yTrain
 
-
 def preprocessing(data, test_size, colums, shifts, negShifts):
     data = slidingWindow(data, colums, shifts, negShifts)
     data = splitData(data, 'electricLoad', test_size)

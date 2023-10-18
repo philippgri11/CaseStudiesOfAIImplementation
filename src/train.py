@@ -16,7 +16,7 @@ from src.evaluation import evaluateXGBModel, evaluateLSTMModel
 from src.loadData import getData
 from src.preprocessing import preprocessing, preprocessingLSTM
 from src.sweep_config import sweep_id
-from wandb.keras import WandbCallback
+from wandb.keras import WandbCallback as WandbCallbackKeras
 
 with open('../params.yaml', 'r') as file:
     param = yaml.safe_load(file)
@@ -24,6 +24,7 @@ with open('../params.yaml', 'r') as file:
     DNNModelParams = param['DNN_model_params']
     preprocessingParam = param['preprocessing']
     LSTMpreprocessing = param['LSTMpreprocessing']
+    LSTM_model_params = param['LSTM_model_params']
 
 
 def get_value(key, group):
@@ -65,7 +66,7 @@ def trainXGBRegressor():
         xTest, yTest, xTrain, yTrain = preprocessing(data, **preprocessingParam)
         # define model
         model = xgb.XGBRegressor(**XGBRegressorModelParams)
-        model.fit(xTrain, yTrain, verbose=True, eval_set=[(xTest, yTest)], callbacks=[WandbCallback(log_model=True)])
+        model.fit(xTrain, yTrain, verbose=True, eval_set=[(xTest, yTest)], callbacks=[WandbCallback()])
         # save
         path = getPath()
         model.save_model(path)
@@ -141,7 +142,7 @@ def trainDNN():
                       loss=DNNModelParams['loss'])
 
         model.fit(xTrain, yTrain, epochs=DNNModelParams['epochs'], batch_size=DNNModelParams['batch_size'],
-                  validation_data=(xTest, yTest), callbacks=[WandbCallback()])
+                  validation_data=(xTest, yTest), callbacks=[WandbCallbackKeras()])
         evaluation = model.evaluate(xTest, yTest)
         print(f'Evaluation Loss: {evaluation}')
         path = getPath()
@@ -158,18 +159,18 @@ def trainLSTM():
         n_timesteps, n_features = xTrain.shape[1], xTrain.shape[2]
         model = tf.keras.models.Sequential([
             tf.keras.layers.LSTM(64, input_shape=(n_timesteps, n_features), return_sequences=True),
-            tf.keras.layers.Dropout(0.2),
+            tf.keras.layers.Dropout(LSTM_model_params['dropout']),
             tf.keras.layers.LSTM(32),
-            tf.keras.layers.Dropout(0.2),
+            tf.keras.layers.Dropout(LSTM_model_params['dropout']),
             tf.keras.layers.Dense(1)
         ])
 
-        model.compile(optimizer=tf.keras.optimizers.Adam(learning_rate=0.001),
+        model.compile(optimizer=tf.keras.optimizers.Adam(learning_rate=LSTM_model_params['learning_rate']),
                       loss=tf.keras.losses.Huber(),
-                      metrics="mae")
+                      metrics=LSTM_model_params['metrics'])
 
         model.fit(xTrain, yTrain, epochs=DNNModelParams['epochs'], batch_size=DNNModelParams['batch_size'],
-                  validation_data=(xTest, yTest), callbacks=[WandbCallback()])
+                  validation_data=(xTest, yTest), callbacks=[WandbCallbackKeras()])
         evaluation = model.evaluate(xTest, yTest)
         print(f'Evaluation Loss: {evaluation}')
         path = getPath()
@@ -280,4 +281,5 @@ def trainKNeighborsRegressorHP():
 if __name__ == "__main__":
     # wandb.agent(sweep_id, trainXGBRegressor)
     trainLSTM()
+    trainXGBRegressor()
     # evaluateLSTMModel("..\models\model_2023-10-17_21-43-29.json")
