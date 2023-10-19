@@ -1,6 +1,6 @@
-dataset : 'loadCurveThree'
+dataset : 'loadCurveTwo'
 XGBRegressorModelParams:
-  n_estimators: 2000
+  n_estimators: 1500
   max_depth: 6
   learning_rate: 0.005
   colsample_bytree: 0.9
@@ -11,13 +11,22 @@ XGBRegressorModelParams:
   reg_alpha: 0.5
   reg_lambda: 1.5
 DNN_model_params:
-  epochs: 1
+  epochs: 6
   batch_size: 32
   optimizer: 'adam'
   loss: 'mse'
   activation: 'relu'
 preprocessing:
   test_size: 0.2
-  colums: [ 't1' , 'r1']
+  colums: [ 't1' , 'r1',  'holiday', 'schoolHoliday']
   shifts: 3
   negShifts: -3
+LSTMpreprocessing:
+  test_size: 0.2
+  shifts: 10
+LSTM_model_params:
+  epochs: 6
+  batch_size: 32
+  learning_rate: 0.001
+  metrics: 'mae'
+  dropout: 0.2
