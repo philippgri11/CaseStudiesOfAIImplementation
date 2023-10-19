@@ -9,38 +9,42 @@ import joblib
 
 with open('../params.yaml', 'r') as file:
     param = yaml.safe_load(file)
-    preprocessingParam = param['preprocessing']
+    defaultPreprocessingParam = param['preprocessing']
 
 def evaluateKNeighbors(path):
     loaded_model = joblib.load(path)
-    xTest, yTest, xTrain, yTrain = preprocessing(getData(param['dataset']), **preprocessingParam)
+    xTest, yTest, xTrain, yTrain = preprocessing(getData(param['dataset']), **defaultPreprocessingParam)
     predictedLabels = loaded_model.predict(xTest)
     evaluateModel(predictedLabels)
 
 def evaluateARDModel(path):
     loaded_model = joblib.load(path)
-    xTest, yTest, xTrain, yTrain = preprocessing(getData(param['dataset']), **preprocessingParam)
+    xTest, yTest, xTrain, yTrain = preprocessing(getData(param['dataset']), **defaultPreprocessingParam)
     predictedLabels = loaded_model.predict(xTest)
     evaluateModel(predictedLabels)
 
 def evaluateDNNModel(path):
     loaded_model = tf.keras.models.load_model(path)
-    xTest, yTest, xTrain, yTrain = preprocessing(getData(param['dataset']), **preprocessingParam)
+    xTest, yTest, xTrain, yTrain = preprocessing(getData(param['dataset']), **defaultPreprocessingParam)
     predictedLabels = loaded_model.predict(xTest)
     evaluateModel(predictedLabels)
 
-def evaluateXGBModel(path):
-    loaded_model = xgb.XGBRegressor()
-    loaded_model.load_model(path)
-    xTest, yTest, xTrain, yTrain = preprocessing(getData(param['dataset']), **preprocessingParam)
-    predictedLabels = loaded_model.predict(xTest)
-    evaluateModel(predictedLabels)
+def evaluateXGBModel(path= None, model = None, givenPreprocessingParam = None):
+    if model is None:
+        model = xgb.XGBRegressor()
+        model.load_model(path)
+    preprocessingParams =  givenPreprocessingParam or defaultPreprocessingParam
+    xTest, yTest, xTrain, yTrain = preprocessing(getData(param['dataset']), **preprocessingParams)
+    predictedLabels = model.predict(xTest)
+    return evaluateModel(predictedLabels, yTest)
 
-def evaluateModel(predictedLabels):
-    xTest, yTest, xTrain, yTrain = preprocessing(getData(param['dataset']), **preprocessingParam)
+def evaluateModel(predictedLabels, yTest =None):
+    if yTest is None:
+        xTest, yTest, xTrain, yTrain = preprocessing(getData(param['dataset']), **defaultPreprocessingParam)
     mse = mean_squared_error(yTest.to_numpy(), predictedLabels)
     print(f'MSE is {mse}')
-    plot(yTest,predictedLabels)
+    # plot(yTest,predictedLabels)
+    return mse
 
 
 def plot(yTest,predictedLabels ):

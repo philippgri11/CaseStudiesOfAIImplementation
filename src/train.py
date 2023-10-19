@@ -1,41 +1,74 @@
 import os
 from datetime import datetime
-
 import joblib
+import tensorflow as tf
 import xgboost as xgb
 import yaml
 from sklearn.linear_model import ARDRegression, BayesianRidge
 from sklearn.metrics import make_scorer
-from sklearn.experimental import enable_halving_search_cv
-from sklearn.model_selection import HalvingGridSearchCV
 from sklearn.metrics import mean_squared_error
-import tensorflow as tf
+from sklearn.model_selection import HalvingGridSearchCV
 from sklearn.neighbors import KNeighborsRegressor
-
-from src.evaluation import evaluateXGBModel, evaluateDNNModel, evaluateARDModel
-from src.loadData import readLoadCurveOnetToDataframe, getData
+from wandb.integration.xgboost import WandbCallback
+import wandb
+from src.evaluation import evaluateXGBModel
+from src.loadData import getData
 from src.preprocessing import preprocessing
+from src.sweep_config import sweep_id
 
 with open('../params.yaml', 'r') as file:
     param = yaml.safe_load(file)
-    XGBRegressorModelParams = param['XGBRegressor_model_params']
+    XGBRegressorModelParams = param['XGBRegressorModelParams']
     DNNModelParams = param['DNN_model_params']
     preprocessingParam = param['preprocessing']
 
 
-def trainXGBRegressor():
-    print(param)
-    data = getData(param['dataset'])
-    xTest, yTest, xTrain, yTrain = preprocessing(data, **preprocessingParam)
-    # define model
-    model = xgb.XGBRegressor(**XGBRegressorModelParams)
-    model.fit(xTrain, yTrain, verbose=True, eval_set=[(xTest, yTest)])
+def get_value(key, group):
+    return wandb.config.get(key) or param.get(group).get(key)
 
-    # save
-    path = getPath()
-    # Speichern des Modells in einer Datei
-    model.save_model(path)
-    return path
+
+def trainXGBRegressor():
+    with wandb.init(project='CaseStudiesOfAIImplementation', entity='philippgrill') as run:
+        now = datetime.now()
+        run.name = now.strftime("%d%m%Y%H%M%S")
+        with open('../params.yaml', 'r') as file:
+            param = yaml.safe_load(file)
+        dataset = wandb.config.get('dataset') or param.get('dataset')
+        preprocessingParam = {
+            'test_size': get_value('test_size', 'preprocessing'),
+            'colums': get_value('colums', 'preprocessing'),
+            'shifts': get_value('shifts', 'preprocessing'),
+            'negShifts': get_value('negShifts', 'preprocessing')
+        }
+        XGBRegressorModelParams = {
+            'learning_rate': get_value('learning_rate', 'XGBRegressorModelParams'),
+            'max_depth': get_value('max_depth', 'XGBRegressorModelParams'),
+            'colsample_bytree': get_value('colsample_bytree', 'XGBRegressorModelParams'),
+            'min_child_weight': get_value('min_child_weight', 'XGBRegressorModelParams'),
+            'subsample': get_value('subsample', 'XGBRegressorModelParams'),
+            'reg_alpha': get_value('reg_alpha', 'XGBRegressorModelParams'),
+            'reg_lambda': get_value('reg_lambda', 'XGBRegressorModelParams'),
+            'n_estimators': get_value('n_estimators', 'XGBRegressorModelParams'),
+            'tree_method': get_value('tree_method', 'XGBRegressorModelParams'),
+            'eval_metric': get_value('eval_metric', 'XGBRegressorModelParams')
+        }
+        print(XGBRegressorModelParams)
+        print(preprocessingParam)
+        print(dataset)
+        wandb.config.update(XGBRegressorModelParams)
+        wandb.config.update({'dataset': dataset})
+        wandb.config.update(preprocessingParam)
+        data = getData(dataset)
+        xTest, yTest, xTrain, yTrain = preprocessing(data, **preprocessingParam)
+        # define model
+        model = xgb.XGBRegressor(**XGBRegressorModelParams)
+        model.fit(xTrain, yTrain, verbose=True, eval_set=[(xTest, yTest)], callbacks=[WandbCallback(log_model=True)])
+        # save
+        path = getPath()
+        model.save_model(path)
+        mse = evaluateXGBModel(model=model, givenPreprocessingParam=preprocessingParam)
+        wandb.log({"mse": mse})
+        return path
 
 
 def getPath():
@@ -53,7 +86,7 @@ def trainXGBRegressorHP():
     xTest, yTest, xTrain, yTrain = preprocessing(data, **preprocessingParam)
 
     param_grid = {
-        'n_estimators': [ 1500],
+        'n_estimators': [1500],
         'max_depth': [5, 7, 10],
         'learning_rate': [0.01],
         'colsample_bytree': [0.3, 0.6, 0.9],
@@ -213,5 +246,5 @@ def trainKNeighborsRegressorHP():
 
 
 if __name__ == "__main__":
-    path = trainXGBRegressorHP()
-    evaluateXGBModel(path)
+    wandb.agent(sweep_id, trainXGBRegressor)
+    trainXGBRegressor()
