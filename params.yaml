@@ -12,7 +12,7 @@ XGBRegressorModelParams:
   reg_lambda: 1.5
 DNN_model_params:
   epochs: 6
-  batch_size: 32
+  batch_size: 1024
   optimizer: 'adam'
   loss: 'mse'
   activation: 'relu'
@@ -21,9 +21,19 @@ preprocessing:
   colums: [ 't1' , 'r1',  'holiday', 'schoolHoliday']
   shifts: 3
   negShifts: -3
+  enable_daytime_index: True
+  monthlyCols: [ 't1' , 'r1' ]
+  keepMonthlyAvg: [True, True, True, True]
+  dailyCols: [ 't1' , 'r1' ]
+  keepDailyAvg: [ True, True, True, True]
 LSTMpreprocessing:
   test_size: 0.2
   shifts: 10
+  enable_daytime_index: True
+  monthlyCols: [ 't1' , 'r1' ]
+  keepMonthlyAvg: [ True, True, True, True ]
+  dailyCols: [ 't1' , 'r1' ]
+  keepDailyAvg: [ True, True , True, True]
 LSTM_model_params:
   epochs: 6
   batch_size: 32

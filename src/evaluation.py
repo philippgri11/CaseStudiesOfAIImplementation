@@ -5,7 +5,7 @@ from sklearn.metrics import mean_squared_error
 import matplotlib.pyplot as plt
 import tensorflow as tf
 from src.loadData import getData
-from src.preprocessing import preprocessing, preprocessingLSTM
+from src.preprocessing import preprocessingXGBoost, preprocessingLSTM
 import joblib
 
 with open('../params.yaml', 'r') as file:
@@ -15,19 +15,19 @@ with open('../params.yaml', 'r') as file:
 
 def evaluateKNeighbors(path):
     loaded_model = joblib.load(path)
-    xTest, yTest, xTrain, yTrain = preprocessing(getData(param['dataset']), **defaultPreprocessingParam)
+    xTest, yTest, xTrain, yTrain = preprocessingXGBoost(getData(param['dataset']), **defaultPreprocessingParam)
     predictedLabels = loaded_model.predict(xTest)
     evaluateModel(predictedLabels)
 
 def evaluateARDModel(path):
     loaded_model = joblib.load(path)
-    xTest, yTest, xTrain, yTrain = preprocessing(getData(param['dataset']), **defaultPreprocessingParam)
+    xTest, yTest, xTrain, yTrain = preprocessingXGBoost(getData(param['dataset']), **defaultPreprocessingParam)
     predictedLabels = loaded_model.predict(xTest)
     evaluateModel(predictedLabels)
 
 def evaluateDNNModel(path):
     loaded_model = tf.keras.models.load_model(path)
-    xTest, yTest, xTrain, yTrain = preprocessing(getData(param['dataset']), **defaultPreprocessingParam)
+    xTest, yTest, xTrain, yTrain = preprocessingXGBoost(getData(param['dataset']), **defaultPreprocessingParam)
     predictedLabels = loaded_model.predict(xTest)
     return evaluateModel(predictedLabels, yTest)
 
@@ -45,13 +45,13 @@ def evaluateXGBModel(path= None, model = None, givenPreprocessingParam = None):
         model = xgb.XGBRegressor()
         model.load_model(path)
     preprocessingParams =  givenPreprocessingParam or defaultPreprocessingParam
-    xTest, yTest, xTrain, yTrain = preprocessing(getData(param['dataset']), **preprocessingParams)
+    xTest, yTest, xTrain, yTrain = preprocessingXGBoost(getData(param['dataset']), **preprocessingParams)
     predictedLabels = model.predict(xTest)
     return evaluateModel(predictedLabels, yTest)
 
 def evaluateModel(predictedLabels, yTest =None):
     if yTest is None:
-        xTest, yTest, xTrain, yTrain = preprocessing(getData(param['dataset']), **defaultPreprocessingParam)
+        xTest, yTest, xTrain, yTrain = preprocessingXGBoost(getData(param['dataset']), **defaultPreprocessingParam)
     mse = mean_squared_error(yTest.to_numpy(), predictedLabels)
     for i in range(len(predictedLabels)):
         wandb.log({"predictedLabels": predictedLabels[i]})
