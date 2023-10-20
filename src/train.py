@@ -14,9 +14,9 @@ from wandb.integration.xgboost import WandbCallback
 import wandb
 from src.evaluation import evaluateXGBModel, evaluateLSTMModel
 from src.loadData import getData
-from src.preprocessing import preprocessing, preprocessingLSTM
-from src.sweep_config import sweep_id
+from src.preprocessing import preprocessingXGBoost, preprocessingLSTM
 from wandb.keras import WandbCallback as WandbCallbackKeras
+from src.sweep_config import getSweepIDLSTM, getSweepIDXGBoost
 
 with open('../params.yaml', 'r') as file:
     param = yaml.safe_load(file)
@@ -42,8 +42,14 @@ def trainXGBRegressor():
             'test_size': get_value('test_size', 'preprocessing'),
             'colums': get_value('colums', 'preprocessing'),
             'shifts': get_value('shifts', 'preprocessing'),
-            'negShifts': get_value('negShifts', 'preprocessing')
+            'negShifts': get_value('negShifts', 'preprocessing'),
+            'enable_daytime_index': get_value('enable_daytime_index', 'preprocessing'),
+            'monthlyCols': get_value('monthlyCols', 'preprocessing'),
+            'keepMonthlyAvg': get_value('keepMonthlyAvg', 'preprocessing'),
+            'dailyCols': get_value('dailyCols', 'preprocessing'),
+            'keepDailyAvg': get_value('keepDailyAvg', 'preprocessing')
         }
+
         XGBRegressorModelParams = {
             'learning_rate': get_value('learning_rate', 'XGBRegressorModelParams'),
             'max_depth': get_value('max_depth', 'XGBRegressorModelParams'),
@@ -63,7 +69,7 @@ def trainXGBRegressor():
         wandb.config.update({'dataset': dataset})
         wandb.config.update(preprocessingParam)
         data = getData(dataset)
-        xTest, yTest, xTrain, yTrain = preprocessing(data, **preprocessingParam)
+        xTest, yTest, xTrain, yTrain = preprocessingXGBoost(data, **preprocessingParam)
         # define model
         model = xgb.XGBRegressor(**XGBRegressorModelParams)
         model.fit(xTrain, yTrain, verbose=True, eval_set=[(xTest, yTest)], callbacks=[WandbCallback()])
@@ -87,7 +93,7 @@ def getPath():
 
 def trainXGBRegressorHP():
     data = getData(param['dataset'])
-    xTest, yTest, xTrain, yTrain = preprocessing(data, **preprocessingParam)
+    xTest, yTest, xTrain, yTrain = preprocessingXGBoost(data, **preprocessingParam)
 
     param_grid = {
         'n_estimators': [1500],
@@ -126,7 +132,7 @@ def trainXGBRegressorHP():
 def trainDNN():
     with wandb.init(project='CaseStudiesOfAIImplementation', entity='philippgrill') as run:
         data = getData(param['dataset'])
-        xTest, yTest, xTrain, yTrain = preprocessing(data, **preprocessingParam)
+        xTest, yTest, xTrain, yTrain = preprocessingXGBoost(data, **preprocessingParam)
         model = tf.keras.models.Sequential([
             tf.keras.layers.Input(shape=(12,), name='input_layer'),
             tf.keras.layers.Dense(32, activation=DNNModelParams['activation']),
@@ -154,34 +160,67 @@ def trainLSTM():
     with wandb.init(project='CaseStudiesOfAIImplementation', entity='philippgrill') as run:
         now = datetime.now()
         run.name = now.strftime("%d%m%Y%H%M%S")
-        data = getData(param['dataset'])
+        dataset = wandb.config.get('dataset') or param.get('dataset')
+        data = getData(dataset)
+        LSTMpreprocessing = {
+            'test_size': get_value('test_size', 'LSTMpreprocessing'),
+            'shifts': get_value('shifts', 'LSTMpreprocessing'),
+            'enable_daytime_index': get_value('enable_daytime_index', 'LSTMpreprocessing'),
+            'monthlyCols': get_value('monthlyCols', 'LSTMpreprocessing'),
+            'keepMonthlyAvg': get_value('keepMonthlyAvg', 'LSTMpreprocessing'),
+            'dailyCols': get_value('dailyCols', 'LSTMpreprocessing'),
+            'keepDailyAvg': get_value('keepDailyAvg', 'LSTMpreprocessing')
+        }
+        LSTMModelParams = {
+            'epochs': get_value('epochs', 'LSTM_model_params'),
+            'batch_size': get_value('batch_size', 'LSTM_model_params'),
+            'learning_rate': get_value('learning_rate', 'LSTM_model_params'),
+            'metrics': get_value('metrics', 'LSTM_model_params'),
+            'dropout': get_value('dropout', 'LSTM_model_params')
+        }
+        earlyStopping = tf.keras.callbacks.EarlyStopping(
+            monitor='loss',
+            patience=3,
+            verbose=1,
+            min_delta=0.01,
+            restore_best_weights=True)
+
+        print(LSTMpreprocessing)
+        print(LSTMModelParams)
+        print(dataset)
+        wandb.config.update(LSTMpreprocessing)
+        wandb.config.update({'dataset': dataset})
+        wandb.config.update(LSTMModelParams)
+
         xTest, yTest, xTrain, yTrain = preprocessingLSTM(data, **LSTMpreprocessing)
         n_timesteps, n_features = xTrain.shape[1], xTrain.shape[2]
         model = tf.keras.models.Sequential([
             tf.keras.layers.LSTM(64, input_shape=(n_timesteps, n_features), return_sequences=True),
-            tf.keras.layers.Dropout(LSTM_model_params['dropout']),
+            tf.keras.layers.Dropout(LSTMModelParams['dropout']),
             tf.keras.layers.LSTM(32),
-            tf.keras.layers.Dropout(LSTM_model_params['dropout']),
+            tf.keras.layers.Dropout(LSTMModelParams['dropout']),
             tf.keras.layers.Dense(1)
         ])
 
-        model.compile(optimizer=tf.keras.optimizers.Adam(learning_rate=LSTM_model_params['learning_rate']),
+        model.compile(optimizer=tf.keras.optimizers.Adam(learning_rate=LSTMModelParams['learning_rate']),
                       loss=tf.keras.losses.Huber(),
-                      metrics=LSTM_model_params['metrics'])
+                      metrics=LSTMModelParams['metrics'])
 
-        model.fit(xTrain, yTrain, epochs=DNNModelParams['epochs'], batch_size=DNNModelParams['batch_size'],
-                  validation_data=(xTest, yTest), callbacks=[WandbCallbackKeras()])
+        model.fit(xTrain, yTrain, epochs=LSTMModelParams['epochs'], batch_size=LSTMModelParams['batch_size'],
+                  validation_data=(xTest, yTest), callbacks=[WandbCallbackKeras(), earlyStopping])
         evaluation = model.evaluate(xTest, yTest)
         print(f'Evaluation Loss: {evaluation}')
         path = getPath()
         model.save(path)
-        evaluateLSTMModel(model=model)
+        mse = evaluateLSTMModel(model=model, givenPreprocessingParam =  LSTMpreprocessing)
+        wandb.log({"mse": mse})
         return path
+
 
 def trainARDRegressor():
     print(param)
     data = getData(param['dataset'])
-    xTest, yTest, xTrain, yTrain = preprocessing(data, **preprocessingParam)
+    xTest, yTest, xTrain, yTrain = preprocessingXGBoost(data, **preprocessingParam)
 
     model = BayesianRidge(
         n_iter=1000
@@ -196,7 +235,7 @@ def trainARDRegressor():
 def trainARDRegressorHP():
     print(param)
     data = getData(param['dataset'])
-    xTest, yTest, xTrain, yTrain = preprocessing(data, **preprocessingParam)
+    xTest, yTest, xTrain, yTrain = preprocessingXGBoost(data, **preprocessingParam)
 
     model = ARDRegression(
     )
@@ -230,7 +269,7 @@ def trainARDRegressorHP():
 def trainKNeighborsRegressor():
     print(param)
     data = getData(param['dataset'])
-    xTest, yTest, xTrain, yTrain = preprocessing(data, **preprocessingParam)
+    xTest, yTest, xTrain, yTrain = preprocessingXGBoost(data, **preprocessingParam)
 
     model = KNeighborsRegressor(
         n_neighbors=100,
@@ -249,7 +288,7 @@ def trainKNeighborsRegressor():
 def trainKNeighborsRegressorHP():
     print(param)
     data = getData(param['dataset'])
-    xTest, yTest, xTrain, yTrain = preprocessing(data, **preprocessingParam)
+    xTest, yTest, xTrain, yTrain = preprocessingXGBoost(data, **preprocessingParam)
 
     model = KNeighborsRegressor()
 
@@ -279,7 +318,8 @@ def trainKNeighborsRegressorHP():
 
 
 if __name__ == "__main__":
-    # wandb.agent(sweep_id, trainXGBRegressor)
-    trainLSTM()
-    trainXGBRegressor()
+    wandb.agent(getSweepIDLSTM(), trainLSTM)
+    # wandb.agent(getSweepIDXGBoost(), trainXGBRegressor)
+    # trainLSTM()
+    # trainXGBRegressor()
     # evaluateLSTMModel("..\models\model_2023-10-17_21-43-29.json")
