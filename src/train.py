@@ -1,6 +1,7 @@
 import os
 from datetime import datetime
 import joblib
+import pandas as pd
 import tensorflow as tf
 import xgboost as xgb
 import yaml
@@ -12,11 +13,14 @@ from sklearn.model_selection import HalvingGridSearchCV
 from sklearn.neighbors import KNeighborsRegressor
 from wandb.integration.xgboost import WandbCallback
 import wandb
-from src.evaluation import evaluateXGBModel, evaluateLSTMModel
+from src.evaluation import evaluateXGBModel, evaluateLSTMModel, evaluateXGBModelWithCV
 from src.loadData import getData
 from src.preprocessing import preprocessingXGBoost, preprocessingLSTM
 from wandb.keras import WandbCallback as WandbCallbackKeras
 from src.sweep_config import getSweepIDLSTM, getSweepIDXGBoost
+from statsmodels.tsa.statespace.sarimax import SARIMAX
+from sklearn.metrics import mean_squared_error
+from statsmodels.tsa.stattools import acf, pacf
 
 with open('../params.yaml', 'r') as file:
     param = yaml.safe_load(file)
@@ -28,7 +32,9 @@ with open('../params.yaml', 'r') as file:
 
 
 def get_value(key, group):
-    return wandb.config.get(key) or param.get(group).get(key)
+    if wandb.config.get(key) is not None:
+        return wandb.config.get(key)
+    return param.get(group).get(key)
 
 
 def trainXGBRegressor():
@@ -40,6 +46,7 @@ def trainXGBRegressor():
         dataset = wandb.config.get('dataset') or param.get('dataset')
         preprocessingParam = {
             'test_size': get_value('test_size', 'preprocessing'),
+            'val_size': get_value('val_size', 'preprocessing'),
             'colums': get_value('colums', 'preprocessing'),
             'shifts': get_value('shifts', 'preprocessing'),
             'negShifts': get_value('negShifts', 'preprocessing'),
@@ -47,7 +54,8 @@ def trainXGBRegressor():
             'monthlyCols': get_value('monthlyCols', 'preprocessing'),
             'keepMonthlyAvg': get_value('keepMonthlyAvg', 'preprocessing'),
             'dailyCols': get_value('dailyCols', 'preprocessing'),
-            'keepDailyAvg': get_value('keepDailyAvg', 'preprocessing')
+            'keepDailyAvg': get_value('keepDailyAvg', 'preprocessing'),
+            'loadLag': get_value('loadLag', 'preprocessing')
         }
 
         XGBRegressorModelParams = {
@@ -60,7 +68,7 @@ def trainXGBRegressor():
             'reg_lambda': get_value('reg_lambda', 'XGBRegressorModelParams'),
             'n_estimators': get_value('n_estimators', 'XGBRegressorModelParams'),
             'tree_method': get_value('tree_method', 'XGBRegressorModelParams'),
-            'eval_metric': get_value('eval_metric', 'XGBRegressorModelParams')
+            'eval_metric': get_value('eval_metric', 'XGBRegressorModelParams'),
         }
         print(XGBRegressorModelParams)
         print(preprocessingParam)
@@ -69,15 +77,17 @@ def trainXGBRegressor():
         wandb.config.update({'dataset': dataset})
         wandb.config.update(preprocessingParam)
         data = getData(dataset)
-        xTest, yTest, xTrain, yTrain = preprocessingXGBoost(data, **preprocessingParam)
+        xTrain, yTrain, xVal, yVal, xTest, yTest = preprocessingXGBoost(data, **preprocessingParam)
         # define model
         model = xgb.XGBRegressor(**XGBRegressorModelParams)
-        model.fit(xTrain, yTrain, verbose=True, eval_set=[(xTest, yTest)], callbacks=[WandbCallback()])
+
+        model.fit(xTrain, yTrain, verbose=True, eval_set=[(xVal, yVal)], callbacks=[WandbCallback()]
+                  )
         # save
         path = getPath()
         model.save_model(path)
-        mse = evaluateXGBModel(model=model, givenPreprocessingParam=preprocessingParam)
-        wandb.log({"mse": mse})
+        evaluateXGBModel(model=model, givenPreprocessingParam=preprocessingParam)
+        evaluateXGBModelWithCV(model=model, givenPreprocessingParam=preprocessingParam)
         return path
 
 
@@ -85,7 +95,7 @@ def getPath():
     now = datetime.now()
     timestamp = now.strftime("%Y-%m-%d_%H-%M-%S")
     filename = f'model_{timestamp}.json'
-    model_dir = '..\models'
+    model_dir = '../models'
     path = os.path.join(model_dir, filename)
     print(f'saved to {path}')
     return path
@@ -93,7 +103,9 @@ def getPath():
 
 def trainXGBRegressorHP():
     data = getData(param['dataset'])
-    xTest, yTest, xTrain, yTrain = preprocessingXGBoost(data, **preprocessingParam)
+    print(preprocessingParam)
+
+    xTrain, yTrain, xVal, yVal, xTest, yTest = preprocessingXGBoost(data, **preprocessingParam)
 
     param_grid = {
         'n_estimators': [1500],
@@ -132,7 +144,7 @@ def trainXGBRegressorHP():
 def trainDNN():
     with wandb.init(project='CaseStudiesOfAIImplementation', entity='philippgrill') as run:
         data = getData(param['dataset'])
-        xTest, yTest, xTrain, yTrain = preprocessingXGBoost(data, **preprocessingParam)
+        xTrain, yTrain, xVal, yVal, xTest, yTest = preprocessingXGBoost(data, **preprocessingParam)
         model = tf.keras.models.Sequential([
             tf.keras.layers.Input(shape=(12,), name='input_layer'),
             tf.keras.layers.Dense(32, activation=DNNModelParams['activation']),
@@ -220,7 +232,7 @@ def trainLSTM():
 def trainARDRegressor():
     print(param)
     data = getData(param['dataset'])
-    xTest, yTest, xTrain, yTrain = preprocessingXGBoost(data, **preprocessingParam)
+    xTrain, yTrain, xVal, yVal, xTest, yTest = preprocessingXGBoost(data, **preprocessingParam)
 
     model = BayesianRidge(
         n_iter=1000
@@ -235,7 +247,7 @@ def trainARDRegressor():
 def trainARDRegressorHP():
     print(param)
     data = getData(param['dataset'])
-    xTest, yTest, xTrain, yTrain = preprocessingXGBoost(data, **preprocessingParam)
+    xTrain, yTrain, xVal, yVal, xTest, yTest = preprocessingXGBoost(data, **preprocessingParam)
 
     model = ARDRegression(
     )
@@ -253,7 +265,7 @@ def trainARDRegressorHP():
                                       cv=5,
                                       verbose=2,
                                       scoring=make_scorer(mean_squared_error,
-                                                          greater_is_better=False),  # Benutzerdefinierter Scorer
+                                                          greater_is_better=False),
                                       )
     grid_search.fit(xTrain, yTrain)
     print('Best parameters found: ', grid_search.best_params_)
@@ -269,7 +281,7 @@ def trainARDRegressorHP():
 def trainKNeighborsRegressor():
     print(param)
     data = getData(param['dataset'])
-    xTest, yTest, xTrain, yTrain = preprocessingXGBoost(data, **preprocessingParam)
+    xTrain, yTrain, xVal, yVal, xTest, yTest = preprocessingXGBoost(data, **preprocessingParam)
 
     model = KNeighborsRegressor(
         n_neighbors=100,
@@ -288,7 +300,7 @@ def trainKNeighborsRegressor():
 def trainKNeighborsRegressorHP():
     print(param)
     data = getData(param['dataset'])
-    xTest, yTest, xTrain, yTrain = preprocessingXGBoost(data, **preprocessingParam)
+    xTrain, yTrain, xVal, yVal, xTest, yTest = preprocessingXGBoost(data, **preprocessingParam)
 
     model = KNeighborsRegressor()
 
@@ -318,7 +330,7 @@ def trainKNeighborsRegressorHP():
 
 
 if __name__ == "__main__":
-    wandb.agent(getSweepIDLSTM(), trainLSTM)
+    wandb.agent(getSweepIDXGBoost(), trainXGBRegressor)
     # wandb.agent(getSweepIDXGBoost(), trainXGBRegressor)
     # trainLSTM()
     # trainXGBRegressor()

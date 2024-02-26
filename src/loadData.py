@@ -10,10 +10,30 @@ def readLoadCurveOnetToDataframe(file_path, sep=';', decimal=','):
     df = cleanData(df)
     return df.dropna()
 
+def readLoadCurveOneFullToDataframe(file_path, sep=';', decimal=','):
+    # The semicolon (;) is used as a separator and the comma (,) as a decimal separator.
+    df = pd.read_csv(file_path, sep=sep, decimal=decimal, header=0, names=['startDate', 'endDate', 'electricLoad'])
+    df['startDate'] = pd.to_datetime(df['startDate'], format='%d.%m.%y %H:%M')
+    # df['endDate'] = pd.to_datetime(df['endDate'], format='%d.%m.%Y %H:%M')
+    df = df.drop(columns='endDate').dropna()
+    df = dateToFloat(df, ['startDate'])
+    df = cleanData(df)
+    return df.dropna()
+
 def readLoadCurveTwoToDataframe(file_path, sep=';', decimal=','):
     # The semicolon (;) is used as a separator and the comma (,) as a decimal separator.
     df = pd.read_csv(file_path, sep=sep, decimal=decimal, header=0, names=['startDate', 'endDate', 'electricLoad', 't1', 't2', 'r1', 'r2'])
     df['startDate'] = pd.to_datetime(df['startDate'], format='%d.%m.%Y %H:%M')
+    # df['endDate'] = pd.to_datetime(df['endDate'], format='%d.%m.%Y %H:%M')
+    df = df.drop(columns='endDate').dropna()
+    df = dateToFloat(df, ['startDate'])
+    df = cleanData(df)
+    return df
+
+def readLoadCurveTwoFullToDataframe(file_path, sep=';', decimal=','):
+    # The semicolon (;) is used as a separator and the comma (,) as a decimal separator.
+    df = pd.read_csv(file_path, sep=sep, decimal=decimal, header=0, names=['startDate', 'endDate', 'electricLoad', 't1', 't2', 'r1', 'r2'])
+    df['startDate'] = pd.to_datetime(df['startDate'], format='%d.%m.%y %H:%M')
     # df['endDate'] = pd.to_datetime(df['endDate'], format='%d.%m.%Y %H:%M')
     df = df.drop(columns='endDate').dropna()
     df = dateToFloat(df, ['startDate'])
@@ -30,7 +50,15 @@ def readLoadCurveThreeToDataframe(file_path, sep=';', decimal=','):
     df = cleanData(df)
     return df
 
-
+def readLoadCurveThreeFullToDataframe(file_path, sep=';', decimal=','):
+    # The semicolon (;) is used as a separator and the comma (,) as a decimal separator.
+    df = pd.read_csv(file_path, sep=sep, decimal=decimal, header=0,  names=['startDate', 'endDate', 'electricLoad', 't1',  'r1'])
+    df['startDate'] = pd.to_datetime(df['startDate'], format='%d.%m.%y %H:%M')
+    # df['endDate'] = pd.to_datetime(df['endDate'], format='%d.%m.%Y %H:%M')
+    df = df.drop(columns='endDate')
+    df = dateToFloat(df, ['startDate'])
+    df = cleanData(df)
+    return df
 def readHolidayToDataframe(file_path, sep=';'):
     # The semicolon (;) is used as a separator and the comma (,) as a decimal separator.
     df = pd.read_csv(file_path, sep=sep, header=0, names=['date', 'holiday', 'schoolHoliday'])
@@ -85,6 +113,13 @@ def getData(dataset):
         loadCurve = readLoadCurveTwoToDataframe("../data/training_data_period_2.csv")
     elif dataset == 'loadCurveThree':
         loadCurve = readLoadCurveThreeToDataframe("../data/training_data_period_3.csv")
+    elif dataset == 'loadCurveOneFull':
+        loadCurve = readLoadCurveOneFullToDataframe("../data/training_data_period_1_full.csv")
+    elif dataset == 'loadCurveTwoFull':
+        loadCurve = readLoadCurveTwoFullToDataframe("../data/training_data_period_2_full.csv")
+    elif dataset == 'loadCurveThreeFull':
+        loadCurve = readLoadCurveThreeFullToDataframe("../data/training_data_period_3_full.csv")
+
     else:
         raise ValueError("Datase Not Suported")
     holiday = readHolidayToDataframe("../data/holiday.csv")

@@ -16,12 +16,11 @@ sweep_config = {
 }
 
 metric = {
-    'name': 'mse',
+    'name': 'mse_val',
     'goal': 'minimize'
 }
 
 sweep_config['metric'] = metric
-
 features = {
     'loadCurveOne': {
         "monthlyCols": {
@@ -31,19 +30,47 @@ features = {
             "values": [[]]
         }
     },
+    'loadCurveOneFull': {
+        "monthlyCols": {
+            "values": [[]]
+        },
+        "dailyCols": {
+            "values": [[]]
+        },
+        "colums": {
+            "values": [[]]
+        }
+    },
     'loadCurveTwo': {
         "monthlyCols": {
             "values": [['t1', 'r1'], ['t1'], ['r1'], ['t2'], ['r2'], ['t1', 't2'], ['t1', 'r1', 't2', 'r2']]
         },
         "dailyCols": {
             "values": [['t1', 'r1'], ['t1'], ['r1'], ['t2'], ['r2'], ['t1', 't2'], ['t1', 'r1', 't2', 'r2']]
+        },
+        "colums": {
+            "values": [['t1', 'r1'], ['t1'], ['r1'], ['t2'], ['r2'], ['t1', 't2'], ['t1', 'r1', 't2', 'r2']]
         }
     },
-    'loadCurveThree': {
+    'loadCurveTwoFull': {
+        "monthlyCols": {
+            "values": [['t1', 'r1'], ['t1'], ['r1'], ['t2'], ['r2'], ['t1', 't2'], ['t1', 'r1', 't2', 'r2']]
+        },
+        "dailyCols": {
+            "values": [['t1', 'r1'], ['t1'], ['r1'], ['t2'], ['r2'], ['t1', 't2'], ['t1', 'r1', 't2', 'r2']]
+        },
+        "colums": {
+            "values": [['t1', 'r1'], ['t1'], ['r1'], ['t2'], ['r2'], ['t1', 't2'], ['t1', 'r1', 't2', 'r2']]
+        }
+    },
+    'loadCurveThreeFull': {
         "monthlyCols": {
             "values": [['t1', 'r1'], ['t1'], ['r1']]
         },
         "dailyCols": {
+            "values": [['t1', 'r1'], ['t1'], ['r1']]
+        },
+        "colums": {
             "values": [['t1', 'r1'], ['t1'], ['r1']]
         }
     }
@@ -53,7 +80,7 @@ parameters_dict_XGBoost = {
         "values": [4, 6, 8, 10]
     },
     "colsample_bytree": {
-        "min": 0.1,
+        "min": 0.5,
         "max": 1.0
     },
     "min_child_weight": {
@@ -66,11 +93,11 @@ parameters_dict_XGBoost = {
     },
     "reg_alpha": {
         "min": 0.0,
-        "max": 1.0
+        "max": 5.0
     },
     "reg_lambda": {
         "min": 0.0,
-        "max": 2.0
+        "max": 5.0
     },
     "n_estimators": {
         "min": 1000,
@@ -85,12 +112,13 @@ parameters_dict_XGBoost = {
     "test_size": {
         "value": 0.2
     },
-    "colums": {
-        "values": [['t1', 'r1']]
-    },
     "shifts": {
         "min": 0,
         "max": 10
+    },
+    "loadLag":{
+        "min": 0,
+        "max": 500
     },
     "negShifts": {
         "min": -10,
@@ -100,7 +128,8 @@ parameters_dict_XGBoost = {
         "values": [True, False]
     },
     "monthlyCols": features[dataset]['monthlyCols'],
-    "dailyCols": features[dataset]['dailyCols']
+    "dailyCols": features[dataset]['dailyCols'],
+    "colums": features[dataset]['colums'],
 }
 parameters_dict_LSTM = {
     "epochs": {
@@ -136,11 +165,11 @@ parameters_dict_LSTM = {
 
 def getSweepIDLSTM():
     sweep_config['parameters'] = parameters_dict_LSTM
-    sweep_id = wandb.sweep(sweep_config, project='CaseStudiesOfAIImplementation', entity='philippgrill')
+    sweep_id = wandb.sweep(sweep=sweep_config, project='CaseStudiesOfAIImplementation', entity='philippgrill')
     return sweep_id
 
 
 def getSweepIDXGBoost():
     sweep_config['parameters'] = parameters_dict_XGBoost
-    sweep_id = wandb.sweep(sweep_config, project='CaseStudiesOfAIImplementation', entity='philippgrill')
+    sweep_id = wandb.sweep(sweep=sweep_config, project='CaseStudiesOfAIImplementation', entity='philippgrill')
     return sweep_id

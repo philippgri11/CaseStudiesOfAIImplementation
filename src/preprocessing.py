@@ -1,7 +1,6 @@
 import numpy as np
 import pandas as pd
 from sklearn.preprocessing import StandardScaler
-import pvlib
 from datetime import timedelta, datetime
 from astral.sun import sun
 from astral import LocationInfo
@@ -35,21 +34,40 @@ def preprocessingLSTM(data, shifts, test_size=0.2, target='electricLoad', enable
     xTest, yTest, xTrain, yTrain = splitData(data, target, test_size=test_size)
     xTestScaler = StandardScaler()
     xTrainScaler = StandardScaler()
+    #todo one norm
     xTest = pd.DataFrame(xTestScaler.fit_transform(xTest.to_numpy()))
     xTrain = pd.DataFrame(xTrainScaler.fit_transform(xTrain.to_numpy()))
     return prepareDataLSTM(xTest, shifts), yTest.iloc[:-shifts + 1], prepareDataLSTM(xTrain, shifts), yTrain.iloc[
                                                                                                       :-shifts + 1]
 
 
-def splitData(data, target, test_size=0.2):
-    train_df = data.head(int(len(data) * (1 - test_size)))
-    test_df = data.tail(int(len(data) * (test_size)))
-    xTest = test_df.drop(target, axis=1)
-    yTest = test_df[target]
+def split_data(data, target, test_size, val_size):
+    # Berechne die Größe für Trainingsdatensatz
+    train_size = 1 - (test_size + val_size)
+
+    # Stelle sicher, dass die Größenangaben gültig sind
+    if train_size < 0:
+        raise ValueError("Die Summe von test_size und val_size muss kleiner als 1 sein.")
+
+    # Splitte die Daten in Trainings-, Validierungs- und Testdatensätze
+    train_end = int(len(data) * train_size)
+    val_end = train_end + int(len(data) * val_size)
+
+    train_df = data.iloc[:train_end]
+    val_df = data.iloc[train_end:val_end]
+    test_df = data.iloc[val_end:]
+
+    # Bereite die Trainings-, Validierungs- und Testdatensätze vor
     xTrain = train_df.drop(target, axis=1)
     yTrain = train_df[target]
-    return xTest, yTest, xTrain, yTrain
 
+    xVal = val_df.drop(target, axis=1)
+    yVal = val_df[target]
+
+    xTest = test_df.drop(target, axis=1)
+    yTest = test_df[target]
+
+    return xTrain, yTrain, xVal, yVal, xTest, yTest
 
 def commonPreprocessing(data, enable_daytime_index=True, dailyCols=None,
                         monthlyCols=None, keepDailyAvg=None, keepMonthlyAvg=None):
@@ -61,18 +79,23 @@ def commonPreprocessing(data, enable_daytime_index=True, dailyCols=None,
         data = daily_diff(data, dailyCols, keepDailyAvg)
     return data
 
+def add_rolling_average_electric_load(df, column, window_size):
+    df[f'{column}_rolling_avg_{window_size}'] = df[column].shift(1).rolling(window=window_size).mean()
+    return df
 
-def preprocessingXGBoost(data, test_size, colums, shifts, negShifts, enable_daytime_index=True, dailyCols=None,
-                         monthlyCols=None, keepDailyAvg=None, keepMonthlyAvg=None):
+def preprocessingXGBoost(data, test_size, val_size, colums, shifts, negShifts, enable_daytime_index=True, dailyCols=None,
+                         monthlyCols=None, keepDailyAvg=None, keepMonthlyAvg=None, loadLag=0):
     data = commonPreprocessing(data, enable_daytime_index=enable_daytime_index, dailyCols=dailyCols,
                                monthlyCols=monthlyCols, keepDailyAvg=keepDailyAvg, keepMonthlyAvg=keepMonthlyAvg)
     data = slidingWindow(data, colums, shifts, negShifts)
-    data = splitData(data, 'electricLoad', test_size)
+    print(f'loadLag= {loadLag}')
+    data = add_rolling_average_electric_load(data, 'electricLoad', loadLag)
+    data = split_data(data, 'electricLoad', test_size, val_size)
     return data
 
 
 def get_daylight_phase(row):
-    city = LocationInfo("Berlin", "Germany", "Europe/Berlin", 52.5200, 13.4050)  # Bitte an Ihren Standort anpassen
+    city = LocationInfo("Berlin", "Germany", "Europe/Berlin", 52.5200, 13.4050)
     date_time = datetime(int(row['startDate_year']), int(row['startDate_month']), int(row['startDate_day']),
                          int(row['startDate_hour']), int(row['startDate_minute']))
     s = sun(city.observer, date=date_time.date())
