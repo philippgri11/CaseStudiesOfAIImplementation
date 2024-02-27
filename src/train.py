@@ -1,6 +1,7 @@
 import os
 from datetime import datetime
 
+from sklearn.experimental import enable_halving_search_cv
 import joblib
 import tensorflow as tf
 import xgboost as xgb
@@ -13,11 +14,13 @@ from sklearn.neighbors import KNeighborsRegressor
 from wandb.integration.xgboost import WandbCallback
 from wandb.keras import WandbCallback as WandbCallbackKeras
 
+
+
 import wandb
-from src.evaluation import evaluate_xgb_model, evaluate_lstm_model, evaluate_xgb_model_with_cv
-from src.load_data import get_data
-from src.preprocessing import preprocessing_xg_boost, preprocessing_lstm
-from src.sweep_config import getSweepIDXGBoost
+from evaluation import evaluate_xgb_model, evaluate_lstm_model, evaluate_xgb_model_with_cv
+from load_data import get_data
+from preprocessing import preprocessing_xg_boost, preprocessing_lstm
+from sweep_config import getSweepIDXGBoost
 
 with open("../params.yaml", "r") as file:
     param = yaml.safe_load(file)
@@ -29,12 +32,35 @@ with open("../params.yaml", "r") as file:
 
 
 def get_value(key, group):
+    """
+        Retrieves a value for a given key from Weights & Biases configuration or fallbacks to parameters defined in YAML.
+
+        Parameters
+        ----------
+        key : str
+            The key for the desired parameter.
+        group : str
+            The parameter group within the YAML file.
+
+        Returns
+        -------
+        value
+            The retrieved value for the given key.
+    """
     if wandb.config.get(key) is not None:
         return wandb.config.get(key)
     return param.get(group).get(key)
 
 
 def trainXGBRegressor():
+    """
+        Trains an XGBoost regressor model with parameters defined in Weights & Biases or YAML file, evaluates the model, and saves it.
+
+        Returns
+        -------
+        str
+            The path where the trained model is saved.
+    """
     with wandb.init(
         project="CaseStudiesOfAIImplementation", entity="philippgrill"
     ) as run:
@@ -46,15 +72,15 @@ def trainXGBRegressor():
         preprocessing_param = {
             "test_size": get_value("test_size", "preprocessing"),
             "val_size": get_value("val_size", "preprocessing"),
-            "colums": get_value("colums", "preprocessing"),
+            "columns": get_value("columns", "preprocessing"),
             "shifts": get_value("shifts", "preprocessing"),
-            "negShifts": get_value("negShifts", "preprocessing"),
+            "neg_shifts": get_value("neg_shifts", "preprocessing"),
             "enable_daytime_index": get_value("enable_daytime_index", "preprocessing"),
-            "monthlyCols": get_value("monthlyCols", "preprocessing"),
-            "keepMonthlyAvg": get_value("keepMonthlyAvg", "preprocessing"),
-            "dailyCols": get_value("dailyCols", "preprocessing"),
-            "keepDailyAvg": get_value("keepDailyAvg", "preprocessing"),
-            "loadLag": get_value("loadLag", "preprocessing"),
+            "monthly_cols": get_value("monthly_cols", "preprocessing"),
+            "keep_monthly_avg": get_value("keep_monthly_avg", "preprocessing"),
+            "daily_cols": get_value("daily_cols", "preprocessing"),
+            "keep_daily_avg": get_value("keep_daily_avg", "preprocessing"),
+            "load_lag": get_value("load_lag", "preprocessing"),
         }
 
         xgb_regressor_model_params = {
@@ -102,6 +128,14 @@ def trainXGBRegressor():
 
 
 def get_path():
+    """
+        Generates a file path for saving a model with a timestamp.
+
+        Returns
+        -------
+        str
+            The file path where a model should be saved.
+    """
     now = datetime.now()
     timestamp = now.strftime("%Y-%m-%d_%H-%M-%S")
     filename = f"model_{timestamp}.json"
@@ -112,6 +146,14 @@ def get_path():
 
 
 def train_dnn():
+    """
+        Trains a Deep Neural Network (DNN) model using TensorFlow and Keras, evaluates the model, and saves it.
+
+        Returns
+        -------
+        str
+            The path where the trained DNN model is saved.
+    """
     with wandb.init(
         project="CaseStudiesOfAIImplementation", entity="philippgrill"
     ) as run:
@@ -152,6 +194,14 @@ def train_dnn():
 
 
 def train_lstm():
+    """
+        Trains a Long Short-Term Memory (LSTM) model, evaluates the model, logs the evaluation metrics to Weights & Biases, and saves the model.
+
+        Returns
+        -------
+        str
+            The path where the trained LSTM model is saved.
+    """
     with wandb.init(
         project="CaseStudiesOfAIImplementation", entity="philippgrill"
     ) as run:
@@ -232,6 +282,14 @@ def train_lstm():
 
 
 def train_ard_regressor():
+    """
+        Trains an Automatic Relevance Determination (ARD) regressor model, and saves it.
+
+        Returns
+        -------
+        str
+            The path where the trained ARD regressor model is saved.
+    """
     print(param)
     data = get_data(param["dataset"])
     x_train, y_train, x_val, y_val, x_test, y_test = preprocessing_xg_boost(
@@ -249,6 +307,14 @@ def train_ard_regressor():
 
 
 def trainARDRegressorHP():
+    """
+        Trains an ARD regressor model with hyperparameter tuning using Halving Grid Search CV, and saves the best model.
+
+        Returns
+        -------
+        str
+            The path where the best ARD regressor model from hyperparameter tuning is saved.
+    """
     print(param)
     data = get_data(param["dataset"])
     x_train, y_train, x_val, y_val, x_test, y_test = preprocessing_xg_boost(
@@ -284,7 +350,14 @@ def trainARDRegressorHP():
 
 
 def train_k_neighbors_regressor():
-    print(param)
+    """
+        Trains a K-Neighbors regressor model, and saves it.
+
+        Returns
+        -------
+        str
+            The path where the trained K-Neighbors regressor model is saved.
+    """
     data = get_data(param["dataset"])
     x_train, y_train, x_val, y_val, x_test, y_test = preprocessing_xg_boost(
         data, **preprocessing_param
@@ -301,7 +374,14 @@ def train_k_neighbors_regressor():
 
 
 def train_k_neighbors_regressor_hp():
-    print(param)
+    """
+        Trains a K-Neighbors regressor model with hyperparameter tuning using Halving Grid Search CV, and saves the best model.
+
+        Returns
+        -------
+        str
+            The path where the best K-Neighbors regressor model from hyperparameter tuning is saved.
+    """
     data = get_data(param["dataset"])
     x_train, y_train, x_val, y_val, x_test, y_test = preprocessing_xg_boost(
         data, **preprocessing_param

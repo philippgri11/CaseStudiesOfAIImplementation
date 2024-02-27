@@ -3,19 +3,23 @@ import pandas as pd
 
 def read_load_curve_to_dataframe(file_path, sep=";", decimal=",", include_additional_columns=False):
     """
-    Reads a CSV file containing electric load data and converts it to a DataFrame. Automatically detects the date format
-    and handles files with additional environmental columns if specified. It formats the start date as a datetime object,
-    removes the end date column, converts dates to numerical features, cleans the data, and returns the DataFrame without
-    NaN values.
+    Reads a CSV file containing electric load data and converts it to a DataFrame.
 
-    Parameters:
-    - file_path (str): Path to the CSV file.
-    - sep (str, optional): The separator used in the CSV file. Defaults to ";".
-    - decimal (str, optional): The decimal separator used in the CSV file. Defaults to ",".
-    - include_additional_columns (bool, optional): Whether to include additional columns (e.g., environmental data). Defaults to False.
+    Parameters
+    ----------
+    file_path : str
+        Path to the CSV file.
+    sep : str, optional
+        The separator used in the CSV file, by default ";".
+    decimal : str, optional
+        The decimal separator used in the CSV file, by default ",".
+    include_additional_columns : bool, optional
+        Whether to include additional columns (e.g., environmental data), by default False.
 
-    Returns:
-    - pd.DataFrame: A DataFrame containing the cleaned electric load data, with numerical features derived from the start date and electric load as a float.
+    Returns
+    -------
+    pd.DataFrame
+        A DataFrame containing the cleaned electric load data, with numerical features derived from the start date and electric load as a float.
     """
     column_names = ["startDate", "endDate", "electricLoad"]
     if include_additional_columns:
@@ -41,11 +45,15 @@ def get_data(dataset):
     """
     Fetches and processes data based on the specified dataset type.
 
-    Parameters:
-    - dataset (str): The dataset type to fetch and process.
+    Parameters
+    ----------
+    dataset : str
+        The dataset type to fetch and process.
 
-    Returns:
-    - pd.DataFrame: The processed data merged with holiday information if applicable.
+    Returns
+    -------
+    pd.DataFrame
+        The processed data merged with holiday information if applicable.
     """
     file_map = {
         "loadCurveOne": "../data/training_data_period_1.csv",
@@ -69,16 +77,19 @@ def get_data(dataset):
 
 def read_holiday_to_dataframe(file_path, sep=";"):
     """
-    Reads a CSV file containing holiday data and converts it to a DataFrame. It expects columns for date, holiday name,
-    and school holiday indicator. The function formats the date as a datetime object, extracts year, month, and day as
-    separate numerical features, drops the original date column, and returns the DataFrame without NaN values.
+    Reads a CSV file containing holiday data and converts it to a DataFrame.
 
-    Parameters:
-    - file_path (str): Path to the CSV file containing holiday data.
-    - sep (str, optional): The separator used in the CSV file. Defaults to ";".
+    Parameters
+    ----------
+    file_path : str
+        Path to the CSV file containing holiday data.
+    sep : str, optional
+        The separator used in the CSV file, by default ";".
 
-    Returns:
-    - pd.DataFrame: A DataFrame with columns for holiday, school holiday indicator, and extracted date features (year, month, day).
+    Returns
+    -------
+    pd.DataFrame
+        A DataFrame with columns for holiday, school holiday indicator, and extracted date features (year, month, day).
     """
     df = pd.read_csv(
         file_path, sep=sep, header=0, names=["date", "holiday", "schoolHoliday"]
@@ -93,16 +104,19 @@ def read_holiday_to_dataframe(file_path, sep=";"):
 
 def date_to_float(df, cols):
     """
-    Converts datetime columns specified in 'cols' into multiple numerical columns representing day of the week, year, month,
-    day, hour, and minute. This transformation prepares datetime data for machine learning models. The original datetime
-    columns are dropped.
+    Converts datetime columns specified in 'cols' into multiple numerical columns.
 
-    Parameters:
-    - df (pd.DataFrame): DataFrame containing the datetime columns to be converted.
-    - cols (list of str): List of column names in 'df' that are datetime objects to be converted.
+    Parameters
+    ----------
+    df : pd.DataFrame
+        DataFrame containing the datetime columns to be converted.
+    cols : list of str
+        List of column names in 'df' that are datetime objects to be converted.
 
-    Returns:
-    - pd.DataFrame: The DataFrame with original datetime columns replaced by numerical columns.
+    Returns
+    -------
+    pd.DataFrame
+        The DataFrame with original datetime columns replaced by numerical columns.
     """
     for col in cols:
         df["dayofweek"] = df[col].dt.dayofweek
@@ -117,15 +131,17 @@ def date_to_float(df, cols):
 
 def clean_data(df):
     """
-    Cleans the provided DataFrame by replacing placeholder values for missing data ('#NA!') with pandas NA, converting
-    comma decimals to period decimals for numerical consistency, dropping rows with any NA values, and ensuring that
-    'electricLoad' values are treated as floats.
+    Cleans the provided DataFrame by replacing placeholder values for missing data with pandas NA.
 
-    Parameters:
-    - df (pd.DataFrame): The DataFrame to clean.
+    Parameters
+    ----------
+    df : pd.DataFrame
+        The DataFrame to clean.
 
-    Returns:
-    - pd.DataFrame: The cleaned DataFrame with consistent numerical formatting and without NaN values.
+    Returns
+    -------
+    pd.DataFrame
+        The cleaned DataFrame with consistent numerical formatting and without NaN values.
     """
     df.replace("#NA!", pd.NA, inplace=True)
     df.replace({",": "."}, regex=True, inplace=True)
@@ -137,16 +153,19 @@ def clean_data(df):
 
 def merge_holiday_and_load_curve(holiday, loadCurveOne):
     """
-    Merges two DataFrames: one containing holiday data and the other containing electric load data. The merging is based on
-    the year, month, and day columns, matching dates in both DataFrames. The function drops redundant date columns after
-    merging.
+    Merges two DataFrames: one containing holiday data and the other containing electric load data.
 
-    Parameters:
-    - holiday (pd.DataFrame): DataFrame containing holiday data with year, month, and day columns.
-    - loadCurveOne (pd.DataFrame): DataFrame containing electric load data with corresponding year, month, and day columns.
+    Parameters
+    ----------
+    holiday : pd.DataFrame
+        DataFrame containing holiday data with year, month, and day columns.
+    loadCurveOne : pd.DataFrame
+        DataFrame containing electric load data with corresponding year, month, and day columns.
 
-    Returns:
-    - pd.DataFrame: A merged DataFrame containing both electric load and holiday data on matching dates.
+    Returns
+    -------
+    pd.DataFrame
+        A merged DataFrame containing both electric load and holiday data on matching dates.
     """
     merged_df = pd.merge(
         left=loadCurveOne,

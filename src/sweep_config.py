@@ -113,11 +113,11 @@ parameters_dict_XGBoost = {
     "eval_metric": {"value": "mphe"},
     "test_size": {"value": 0.2},
     "shifts": {"min": 0, "max": 10},
-    "loadLag": {"min": 0, "max": 500},
-    "negShifts": {"min": -10, "max": 0},
+    "load_lag": {"min": 0, "max": 500},
+    "neg_shifts": {"min": -10, "max": 0},
     "enable_daytime_index": {"values": [True, False]},
-    "monthlyCols": features[dataset]["monthlyCols"],
-    "dailyCols": features[dataset]["dailyCols"],
+    "monthly_cols": features[dataset]["monthlyCols"],
+    "daily_cols": features[dataset]["dailyCols"],
     "columns": features[dataset]["columns"],
 }
 parameters_dict_LSTM = {

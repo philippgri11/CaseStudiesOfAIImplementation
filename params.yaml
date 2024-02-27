@@ -19,14 +19,14 @@ DNN_model_params:
 preprocessing:
   test_size: 0.2
   val_size: 0.1
-  colums: [ 't1' , 'r1',  'holiday', 'schoolHoliday']
+  columns: [ 't1' , 'r1',  'holiday', 'schoolHoliday']
   shifts: 3
-  negShifts: -3
+  neg_shifts: -3
   enable_daytime_index: True
-  monthlyCols: [ 't1' , 'r1' ]
-  keepMonthlyAvg: [True, True, True, True]
-  dailyCols: [ 't1' , 'r1' ]
-  keepDailyAvg: [ True, True, True, True]
+  monthly_cols: [ 't1' , 'r1' ]
+  keep_monthly_avg: [True, True, True, True]
+  daily_cols: [ 't1' , 'r1' ]
+  keep_daily_avg: [ True, True, True, True]
 LSTMpreprocessing:
   test_size: 0.2
   shifts: 10

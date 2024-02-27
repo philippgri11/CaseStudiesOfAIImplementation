@@ -7,6 +7,25 @@ from astral import LocationInfo
 
 
 def sliding_window(df, columns, shifts, neg_shifts):
+    """
+        Applies a sliding window transformation to specified columns in a DataFrame.
+
+        Parameters
+        ----------
+        df : pd.DataFrame
+            The input DataFrame.
+        columns : list of str
+            Columns to which the sliding window transformation is applied.
+        shifts : int
+            Number of positive shifts (forward in time) to apply for the window.
+        neg_shifts : int
+            Number of negative shifts (backward in time) to apply for the window.
+
+        Returns
+        -------
+        pd.DataFrame
+            The DataFrame with additional shifted columns for the specified window.
+    """
     if shifts > 0:
         for shift in range(1, shifts + 1):
             for col in np.asarray(columns).astype("str"):
@@ -20,6 +39,21 @@ def sliding_window(df, columns, shifts, neg_shifts):
 
 
 def prepare_data_lstm(df, shifts):
+    """
+        Prepares data for LSTM models by creating sequences from DataFrame rows.
+
+        Parameters
+        ----------
+        df : pd.DataFrame
+            Input DataFrame.
+        shifts : int
+            Number of rows to include in each sequence.
+
+        Returns
+        -------
+        np.ndarray
+            A 3D array suitable for LSTM input where each sequence is a time step.
+    """
     data = []
     for i in range(len(df) - shifts + 1):
         seq = df.iloc[i: i + shifts].values
@@ -39,6 +73,37 @@ def preprocessing_lstm(
     keep_daily_avg=None,
     keep_monthly_avg=None,
 ):
+    """
+    Preprocesses data specifically for LSTM models, including scaling and sequence creation.
+
+    Parameters
+    ----------
+    data : pd.DataFrame
+        The input data.
+    shifts : int
+        The number of time steps for each sequence.
+    test_size : float, optional
+        Proportion of the dataset to include in the test split.
+    val_size : float, optional
+        Proportion of the dataset to include in the validation split.
+    target : str, optional
+        The target column in the dataset.
+    enable_daytime_index : bool, optional
+        If True, calculates and includes the daytime index.
+    daily_cols : list of str, optional
+        Columns for which daily differences are calculated.
+    monthly_cols : list of str, optional
+        Columns for which monthly differences are calculated.
+    keep_daily_avg : list of bool, optional
+        Specifies whether to keep the daily averages in the dataset.
+    keep_monthly_avg : list of bool, optional
+        Specifies whether to keep the monthly averages in the dataset.
+
+    Returns
+    -------
+    tuple
+        A tuple containing the processed data splits for training, validation, and testing, each as a numpy array.
+    """
     data = common_preprocessing(
         data,
         enable_daytime_index=enable_daytime_index,
@@ -64,16 +129,32 @@ def preprocessing_lstm(
 
 
 def split_data(data, target, test_size, val_size):
-    # Berechne die Größe für Trainingsdatensatz
+    """
+        Splits the data into training, validation, and testing sets.
+
+        Parameters
+        ----------
+        data : pd.DataFrame
+            The input data.
+        target : str
+            The target column in the dataset.
+        test_size : float
+            Proportion of the dataset to include in the test split.
+        val_size : float
+            Proportion of the dataset to include in the validation split.
+
+        Returns
+        -------
+        tuple
+            A tuple containing the feature and target splits for training, validation, and testing.
+    """
     train_size = 1 - (test_size + val_size)
 
-    # Stelle sicher, dass die Größenangaben gültig sind
     if train_size < 0:
         raise ValueError(
             "Die Summe von test_size und val_size muss kleiner als 1 sein."
         )
 
-    # Splitte die Daten in Trainings-, Validierungs- und Testdatensätze
     train_end = int(len(data) * train_size)
     val_end = train_end + int(len(data) * val_size)
 
@@ -81,7 +162,6 @@ def split_data(data, target, test_size, val_size):
     val_df = data.iloc[train_end:val_end]
     test_df = data.iloc[val_end:]
 
-    # Bereite die Trainings-, Validierungs- und Testdatensätze vor
     x_train = train_df.drop(target, axis=1)
     y_train = train_df[target]
 
@@ -102,6 +182,29 @@ def common_preprocessing(
     keep_daily_avg=None,
     keep_monthly_avg=None,
 ):
+    """
+        Applies common preprocessing steps including daytime index calculation and difference calculations.
+
+        Parameters
+        ----------
+        data : pd.DataFrame
+            The input data.
+        enable_daytime_index : bool, optional
+            If True, calculates and includes the daytime index.
+        daily_cols : list of str, optional
+            Columns for which daily differences are calculated.
+        monthly_cols : list of str, optional
+            Columns for which monthly differences are calculated.
+        keep_daily_avg : list of bool, optional
+            Specifies whether to keep the daily averages in the dataset.
+        keep_monthly_avg : list of bool, optional
+            Specifies whether to keep the monthly averages in the dataset.
+
+        Returns
+        -------
+        pd.DataFrame
+            The preprocessed DataFrame.
+    """
     if enable_daytime_index:
         data = set_daytime_index(data)
     if monthly_cols is not None:
@@ -112,6 +215,23 @@ def common_preprocessing(
 
 
 def add_rolling_average_electric_load(df, column, window_size):
+    """
+        Adds a rolling average column to the DataFrame based on specified window size.
+
+        Parameters
+        ----------
+        df : pd.DataFrame
+            The input DataFrame.
+        column : str
+            The column on which the rolling average is calculated.
+        window_size : int
+            The size of the rolling window.
+
+        Returns
+        -------
+        pd.DataFrame
+            The DataFrame with an added column for the rolling average.
+    """
     df[f"{column}_rolling_avg_{window_size}"] = (
         df[column].shift(1).rolling(window=window_size).mean()
     )
@@ -124,7 +244,7 @@ def preprocessing_xg_boost(
     val_size,
     columns,
     shifts,
-    negShifts,
+    neg_shifts,
     enable_daytime_index=True,
     daily_cols=None,
     monthly_cols=None,
@@ -132,6 +252,41 @@ def preprocessing_xg_boost(
     keep_monthly_avg=None,
     load_lag=0,
 ):
+    """
+        Preprocesses data specifically for XGBoost models, including scaling and feature engineering.
+
+        Parameters
+        ----------
+        data : pd.DataFrame
+            The input data.
+        test_size : float
+            Proportion of the dataset to include in the test split.
+        val_size : float
+            Proportion of the dataset to include in the validation split.
+        columns : list of str
+            Columns to be included in the sliding window transformation.
+        shifts : int
+            Number of positive shifts for the sliding window.
+        neg_shifts : int
+            Number of negative shifts for the sliding window.
+        enable_daytime_index : bool, optional
+            If True, calculates and includes the daytime index.
+        daily_cols : list of str, optional
+            Columns for which daily differences are calculated.
+        monthly_cols : list of str, optional
+            Columns for which monthly differences are calculated.
+        keep_daily_avg : list of bool, optional
+            Specifies whether to keep the daily averages in the dataset.
+        keep_monthly_avg : list of bool, optional
+            Specifies whether to keep the monthly averages in the dataset.
+        load_lag : int, optional
+            The lag size for calculating the rolling average of the electric load.
+
+        Returns
+        -------
+        tuple
+            A tuple containing the feature and target splits for training, validation, and testing.
+    """
     data = common_preprocessing(
         data,
         enable_daytime_index=enable_daytime_index,
@@ -140,14 +295,27 @@ def preprocessing_xg_boost(
         keep_daily_avg=keep_daily_avg,
         keep_monthly_avg=keep_monthly_avg,
     )
-    data = sliding_window(data, columns, shifts, negShifts)
-    print(f"loadLag= {load_lag}")
+    data = sliding_window(data, columns, shifts, neg_shifts)
+    print(f"load_lag= {load_lag}")
     data = add_rolling_average_electric_load(data, "electricLoad", load_lag)
     data = split_data(data, "electricLoad", test_size, val_size)
     return data
 
 
 def get_daylight_phase(row):
+    """
+        Calculates the daylight phase for a given row based on the sunrise and sunset times.
+
+        Parameters
+        ----------
+        row : pd.Series
+            A row of the DataFrame, expected to contain date and time information.
+
+        Returns
+        -------
+        int
+            An integer representing the daylight phase.
+    """
     city = LocationInfo("Berlin", "Germany", "Europe/Berlin", 52.5200, 13.4050)
     date_time = datetime(
         int(row["startDate_year"]),
@@ -172,11 +340,41 @@ def get_daylight_phase(row):
 
 
 def set_daytime_index(df):
+    """
+        Adds a column to the DataFrame representing the daylight phase for each row.
+
+        Parameters
+        ----------
+        df : pd.DataFrame
+            The input DataFrame.
+
+        Returns
+        -------
+        pd.DataFrame
+            The DataFrame with an added 'daylight_phase' column.
+    """
     df["daylight_phase"] = df.apply(get_daylight_phase, axis=1)
     return df
 
 
 def daily_diff(df, cols, keep_avg):
+    """
+        Calculates the daily difference for specified columns and adds them to the DataFrame.
+
+        Parameters
+        ----------
+        df : pd.DataFrame
+            The input DataFrame.
+        cols : list of str
+            Columns for which the daily difference is calculated.
+        keep_avg : list of bool
+            Specifies whether to keep the daily averages in the dataset.
+
+        Returns
+        -------
+        pd.DataFrame
+            The DataFrame with added columns for daily differences.
+    """
     df["date_str_day"] = (
         df["startDate_year"].astype(str)
         + "-"
@@ -202,6 +400,23 @@ def daily_diff(df, cols, keep_avg):
 
 
 def monthly_diff(df, cols, keepAvg):
+    """
+        Calculates the monthly difference for specified columns and adds them to the DataFrame.
+
+        Parameters
+        ----------
+        df : pd.DataFrame
+            The input DataFrame.
+        cols : list of str
+            Columns for which the monthly difference is calculated.
+        keepAvg : list of bool
+            Specifies whether to keep the monthly averages in the dataset.
+
+        Returns
+        -------
+        pd.DataFrame
+            The DataFrame with added columns for monthly differences.
+    """
     df["date_str_month"] = (
         df["startDate_year"].astype(str)
         + "-"

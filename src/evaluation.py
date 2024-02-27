@@ -2,8 +2,8 @@ import wandb
 import yaml
 import matplotlib.pyplot as plt
 import tensorflow as tf
-from src.load_data import get_data
-from src.preprocessing import preprocessing_xg_boost, preprocessing_lstm
+from load_data import get_data
+from preprocessing import preprocessing_xg_boost, preprocessing_lstm
 import joblib
 import numpy as np
 from sklearn.model_selection import cross_val_score, KFold
@@ -18,33 +18,94 @@ with open("../params.yaml", "r") as file:
 
 
 def evaluate_k_neighbors(path):
+    """
+        Evaluates a K-Nearest Neighbors model using test data.
+
+        Parameters
+        ----------
+        path : str
+            The path to the K-Nearest Neighbors model.
+
+        Notes
+        -----
+        This function loads the model, preprocesses the data using XGBoost preprocessing,
+        predicts labels for the test data, and evaluates the model using predefined metrics.
+        """
     loaded_model = joblib.load(path)
-    xTrain, yTrain, xVal, yVal, xTest, yTest = preprocessing_xg_boost(
+    x_train, y_train, x_val, y_val, x_test, y_test = preprocessing_xg_boost(
         get_data(param["dataset"]), **defaultPreprocessingParam
     )
-    predictedLabels = loaded_model.predict(xTest)
-    evaluate_model(predictedLabels)
+    predicted_labels = loaded_model.predict(x_test)
+    evaluate_model(predicted_labels)
 
 
 def evaluate_ard_model(path):
+    """
+        Evaluates an ARD Regression model using test data.
+
+        Parameters
+        ----------
+        path : str
+            The path to the ARD Regression model.
+
+        Notes
+        -----
+        This function loads the ARD model, preprocesses the data using XGBoost preprocessing,
+        predicts labels for the test data, and evaluates the model using predefined metrics.
+    """
     loaded_model = joblib.load(path)
-    xTrain, yTrain, xVal, yVal, xTest, yTest = preprocessing_xg_boost(
+    x_train, y_train, x_val, y_val, x_test, y_test = preprocessing_xg_boost(
         get_data(param["dataset"]), **defaultPreprocessingParam
     )
-    predictedLabels = loaded_model.predict(xTest)
-    evaluate_model(predictedLabels)
+    predicted_labels = loaded_model.predict(x_test)
+    evaluate_model(predicted_labels)
 
 
 def evaluate_dnn_model(path):
+    """
+        Evaluates a Deep Neural Network (DNN) model using test data.
+
+        Parameters
+        ----------
+        path : str
+            The path to the serialized DNN model.
+
+        Returns
+        -------
+        float
+            The mean squared error value on the validation data.
+
+        Notes
+        -----
+        This function loads the DNN model, preprocesses the data using XGBoost preprocessing,
+        predicts labels for the test data, and evaluates the model using predefined metrics.
+    """
     loaded_model = tf.keras.models.load_model(path)
-    xTrain, yTrain, xVal, yVal, xTest, yTest = preprocessing_xg_boost(
+    x_train, y_train, x_val, y_val, x_test, y_test = preprocessing_xg_boost(
         get_data(param["dataset"]), **defaultPreprocessingParam
     )
-    predictedLabels = loaded_model.predict(xTest)
-    return evaluate_model(predictedLabels, yTest)
+    predictedLabels = loaded_model.predict(x_test)
+    return evaluate_model(predictedLabels, y_test)
 
 
 def evaluate_lstm_model(path=None, model=None, givenPreprocessingParam=None):
+    """
+        Evaluates an LSTM model using test data, with optional model loading and preprocessing parameters.
+
+        Parameters
+        ----------
+        path : str, optional
+            The path to the serialized LSTM model, if the model is not provided directly.
+        model : tf.keras.Model, optional
+            An already loaded LSTM model, if available.
+        givenPreprocessingParam : dict, optional
+            Preprocessing parameters to override the defaults.
+
+        Returns
+        -------
+        float
+            The mean squared error value on the validation data.
+        """
     if model is None:
         model = tf.keras.models.load_model(path)
     data = get_data(param["dataset"])
@@ -57,6 +118,23 @@ def evaluate_lstm_model(path=None, model=None, givenPreprocessingParam=None):
 
 
 def evaluate_xgb_model(path=None, model=None, given_preprocessing_param=None):
+    """
+        Evaluates an XGBoost model using test and validation data, with optional model loading and preprocessing parameters.
+
+        Parameters
+        ----------
+        path : str, optional
+            The path to the serialized XGBoost model, if the model is not provided directly.
+        model : xgb.XGBRegressor, optional
+            An already loaded XGBoost model, if available.
+        given_preprocessing_param : dict, optional
+            Preprocessing parameters to override the defaults.
+
+        Returns
+        -------
+        float
+            The mean squared error value on the validation data.
+        """
     if model is None:
         model = xgb.XGBRegressor()
         model.load_model(path)
@@ -70,6 +148,29 @@ def evaluate_xgb_model(path=None, model=None, given_preprocessing_param=None):
 
 
 def evaluate_model(predictedLabelsTest, yTest=None, predictedLabelsVal=None, yVal=None):
+    """
+        Evaluates model predictions against actual labels using multiple metrics.
+
+        Parameters
+        ----------
+        predictedLabelsTest : array-like
+            Predicted labels for the test dataset.
+        yTest : pd.Series or array-like, optional
+            Actual labels for the test dataset.
+        predictedLabelsVal : array-like, optional
+            Predicted labels for the validation dataset.
+        yVal : pd.Series or array-like, optional
+            Actual labels for the validation dataset.
+
+        Returns
+        -------
+        float
+            The mean squared error value on the validation data.
+
+        Notes
+        -----
+        Logs the evaluation metrics to Weights & Biases (wandb) for visualization and tracking.
+        """
     if yTest is None:
         xTrain, yTrain, xVal, yVal, xTest, yTest = preprocessing_xg_boost(
             get_data(param["dataset"]), **defaultPreprocessingParam
@@ -88,6 +189,7 @@ def evaluate_model(predictedLabelsTest, yTest=None, predictedLabelsVal=None, yVa
             {
                 "predictedLabelsTest": predictedLabelsTest[i],
                 "yTest": yTest.to_numpy()[i],
+                "residual": yTest.to_numpy()[i]-predictedLabelsTest[i]
             }
         )
 
@@ -109,6 +211,16 @@ def evaluate_model(predictedLabelsTest, yTest=None, predictedLabelsVal=None, yVa
 
 
 def plot(yTest, predictedLabels):
+    """
+        Plots the actual vs. predicted labels for a subset of the test dataset.
+
+        Parameters
+        ----------
+        yTest : pd.Series or array-like
+            Actual labels for the test dataset.
+        predictedLabels : array-like
+            Predicted labels for the test dataset.
+    """
     plt.figure(figsize=(8, 6))
     plt.plot(yTest.to_numpy()[0:1800], label="real Values (yTest)", marker="o")
     plt.plot(predictedLabels[0:1800], label="predicted Values", marker="x")
@@ -121,6 +233,25 @@ def plot(yTest, predictedLabels):
 def evaluate_xgb_model_with_cv(
     path=None, model=None, given_preprocessing_param=None, cv_splits=5
 ):
+    """
+    Evaluates an XGBoost model using cross-validation.
+
+    Parameters
+    ----------
+    path : str, optional
+        The path to the serialized XGBoost model, if the model is not provided directly.
+    model : xgb.XGBRegressor, optional
+        An already loaded XGBoost model, if available.
+    given_preprocessing_param : dict, optional
+        Preprocessing parameters to override the defaults.
+    cv_splits : int, optional
+        The number of folds in K-Fold cross-validation.
+
+    Returns
+    -------
+    tuple
+        A tuple containing the average MSE, MAE, and R^2 values across all cross-validation splits.
+    """
     if model is None:
         model = xgb.XGBRegressor()
         model.load_model(path)
