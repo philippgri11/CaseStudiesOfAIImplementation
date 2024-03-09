@@ -1,6 +1,7 @@
 import os
 from datetime import datetime
 
+import pandas as pd
 from sklearn.experimental import enable_halving_search_cv
 import joblib
 import tensorflow as tf
@@ -17,10 +18,10 @@ from wandb.keras import WandbCallback as WandbCallbackKeras
 
 
 import wandb
-from evaluation import evaluate_xgb_model, evaluate_lstm_model, evaluate_xgb_model_with_cv
+from evaluation import evaluate_xgb_model, evaluate_lstm_model, evaluate_sklearn_model
 from load_data import get_data
-from preprocessing import preprocessing_xg_boost, preprocessing_lstm
-from sweep_config import getSweepIDXGBoost
+from preprocessing import preprocessing, preprocessing_lstm
+from sweep_config import getSweepIDLSTM, get_sweep_ard, get_sweep_k_neighbors, get_sweep_id_xg_boost
 
 with open("../params.yaml", "r") as file:
     param = yaml.safe_load(file)
@@ -106,7 +107,7 @@ def trainXGBRegressor():
         wandb.config.update({"dataset": dataset})
         wandb.config.update(preprocessing_param)
         data = get_data(dataset)
-        x_train, y_train, x_val, y_val, x_test, y_test = preprocessing_xg_boost(
+        x_train, y_train, x_val, y_val, x_test, y_test = preprocessing(
             data, **preprocessing_param
         )
         # define model
@@ -123,9 +124,98 @@ def trainXGBRegressor():
         path = get_path()
         model.save_model(path)
         evaluate_xgb_model(model=model, given_preprocessing_param=preprocessing_param)
-        evaluate_xgb_model_with_cv(model=model, given_preprocessing_param=preprocessing_param)
         return path
 
+def trainXGBRegressorWithCV():
+    """
+    Trains an XGBoost regressor model with Cross-Validation to determine the best hyperparameters,
+    evaluates the model, and saves it.
+
+    Returns
+    -------
+    str
+        The path where the trained model is saved.
+    """
+    with wandb.init(project="CaseStudiesOfAIImplementation", entity="philippgrill") as run:
+        now = datetime.now()
+        run.name = now.strftime("%d%m%Y%H%M%S")
+        with open("../params.yaml", "r") as file:
+            param = yaml.safe_load(file)
+
+        dataset = wandb.config.get("dataset") or param.get("dataset")
+        preprocessing_param = {
+            "test_size": get_value("test_size", "preprocessing"),
+            "val_size": get_value("val_size", "preprocessing"),
+            "columns": get_value("columns", "preprocessing"),
+            "shifts": get_value("shifts", "preprocessing"),
+            "neg_shifts": get_value("neg_shifts", "preprocessing"),
+            "enable_daytime_index": get_value("enable_daytime_index", "preprocessing"),
+            "monthly_cols": get_value("monthly_cols", "preprocessing"),
+            "keep_monthly_avg": get_value("keep_monthly_avg", "preprocessing"),
+            "daily_cols": get_value("daily_cols", "preprocessing"),
+            "keep_daily_avg": get_value("keep_daily_avg", "preprocessing"),
+            "load_lag": get_value("load_lag", "preprocessing"),
+        }
+
+        xgb_regressor_model_params = {
+            "learning_rate": get_value("learning_rate", "XGBRegressorModelParams"),
+            "max_depth": get_value("max_depth", "XGBRegressorModelParams"),
+            "colsample_bytree": get_value(
+                "colsample_bytree", "XGBRegressorModelParams"
+            ),
+            "min_child_weight": get_value(
+                "min_child_weight", "XGBRegressorModelParams"
+            ),
+            "subsample": get_value("subsample", "XGBRegressorModelParams"),
+            "reg_alpha": get_value("reg_alpha", "XGBRegressorModelParams"),
+            "reg_lambda": get_value("reg_lambda", "XGBRegressorModelParams"),
+            "tree_method": get_value("tree_method", "XGBRegressorModelParams"),
+            "eval_metric": get_value("eval_metric", "XGBRegressorModelParams"),
+        }
+        wandb.config.update(xgb_regressor_model_params)
+        wandb.config.update({"dataset": dataset})
+        wandb.config.update(preprocessing_param)
+
+        data = get_data(dataset)
+        x_train, y_train, x_val, y_val, x_test, y_test = preprocessing(
+            data, **preprocessing_param
+        )
+
+        dtrain_full = xgb.DMatrix(pd.concat([x_train, x_val]), label=pd.concat([y_train, y_val]))
+
+        cv_results = xgb.cv(
+            xgb_regressor_model_params,
+            dtrain_full,
+            num_boost_round=get_value("n_estimators", "XGBRegressorModelParams"),
+            nfold=5,
+            metrics='mphe',
+            early_stopping_rounds=10,
+            stratified=False,
+            seed=42,
+            callbacks=[xgb.callback.EvaluationMonitor(show_stdv=True)]
+        )
+        for metric in cv_results:
+            for fold in range(len(cv_results[metric])):
+                wandb.log({f"{metric}_fold_{fold}": cv_results[metric][fold]})
+
+        # Now train the final model on the full dataset (train + validation)
+        model = xgb.XGBRegressor(**xgb_regressor_model_params,n_estimators=get_value("n_estimators", "XGBRegressorModelParams"))
+
+        model.fit(
+            x_train,
+            y_train,
+            verbose=True,
+            eval_set=[(x_val, y_val)],
+            callbacks=[WandbCallback()],
+        )
+
+        # Save the model
+        path = get_path()
+        model.save_model(path)
+
+        # Evaluate the final model
+        evaluate_xgb_model(model=model, given_preprocessing_param=preprocessing_param)
+        return path
 
 def get_path():
     """
@@ -158,7 +248,7 @@ def train_dnn():
         project="CaseStudiesOfAIImplementation", entity="philippgrill"
     ) as run:
         data = get_data(param["dataset"])
-        x_train, y_train, x_val, y_val, x_test, y_test = preprocessing_xg_boost(
+        x_train, y_train, x_val, y_val, x_test, y_test = preprocessing(
             data, **preprocessing_param
         )
         model = tf.keras.models.Sequential(
@@ -215,10 +305,10 @@ def train_lstm():
             "enable_daytime_index": get_value(
                 "enable_daytime_index", "LSTMpreprocessing"
             ),
-            "monthlyCols": get_value("monthlyCols", "LSTMpreprocessing"),
-            "keepMonthlyAvg": get_value("keepMonthlyAvg", "LSTMpreprocessing"),
-            "dailyCols": get_value("dailyCols", "LSTMpreprocessing"),
-            "keepDailyAvg": get_value("keepDailyAvg", "LSTMpreprocessing"),
+            "monthly_cols": get_value("monthly_cols", "LSTMpreprocessing"),
+            "keep_monthly_avg": get_value("keep_monthly_avg", "LSTMpreprocessing"),
+            "daily_cols": get_value("dailyCols", "LSTMpreprocessing"),
+            "keep_daily_avg": get_value("keep_daily_avg", "LSTMpreprocessing"),
         }
         lstm_model_params = {
             "epochs": get_value("epochs", "LSTM_model_params"),
@@ -242,7 +332,7 @@ def train_lstm():
         wandb.config.update({"dataset": dataset})
         wandb.config.update(lstm_model_params)
 
-        x_test, y_test, x_train, y_train = preprocessing_lstm(data, **lstm_preprocessing)
+        x_train, y_train, x_val, y_val, x_test, y_test = preprocessing_lstm(data, **lstm_preprocessing)
         n_timesteps, n_features = x_train.shape[1], x_train.shape[2]
         model = tf.keras.models.Sequential(
             [
@@ -257,7 +347,7 @@ def train_lstm():
         )
 
         model.compile(
-            optimizer=tf.keras.optimizers.Adam(
+            optimizer=tf.keras.optimizers.legacy.Adam(
                 learning_rate=lstm_model_params["learning_rate"]
             ),
             loss=tf.keras.losses.Huber(),
@@ -290,61 +380,47 @@ def train_ard_regressor():
         str
             The path where the trained ARD regressor model is saved.
     """
-    print(param)
-    data = get_data(param["dataset"])
-    x_train, y_train, x_val, y_val, x_test, y_test = preprocessing_xg_boost(
-        data, **preprocessing_param
-    )
+    with wandb.init(
+        project="CaseStudiesOfAIImplementation", entity="philippgrill"
+    ) as run:
+        now = datetime.now()
+        run.name = now.strftime("%d%m%Y%H%M%S")
+        dataset = wandb.config.get("dataset") or param.get("dataset")
+        data = get_data(dataset)
+        preprocessing_param = {
+            "test_size": get_value("test_size", "preprocessing"),
+            "val_size": get_value("val_size", "preprocessing"),
+            "columns": get_value("columns", "preprocessing"),
+            "shifts": get_value("shifts", "preprocessing"),
+            "neg_shifts": get_value("neg_shifts", "preprocessing"),
+            "enable_daytime_index": get_value("enable_daytime_index", "preprocessing"),
+            "monthly_cols": get_value("monthly_cols", "preprocessing"),
+            "keep_monthly_avg": get_value("keep_monthly_avg", "preprocessing"),
+            "daily_cols": get_value("daily_cols", "preprocessing"),
+            "keep_daily_avg": get_value("keep_daily_avg", "preprocessing"),
+            "load_lag": get_value("load_lag", "preprocessing"),
+        }
 
-    model = BayesianRidge(n_iter=1000)
-    model.fit(x_train, y_train)
-    path = get_path()
-    joblib.dump(
-        model, os.path.join(path)
-    )  # Speichern des Modells als ard_model.pkl im angegebenen Verzeichnis
+        ard_param = {
+            "max_iter": get_value("max_iter", "ard"),
+            "tol": get_value("tol", "ard"),
+            "alpha_1": get_value("alpha_1", "ard"),
+            "alpha_2": get_value("alpha_2", "ard"),
+            "lambda_1": get_value("lambda_1", "ard"),
+            "lambda_2": get_value("lambda_2", "ard"),
+            "compute_score": get_value("compute_score", "ard")
+        }
+        x_train, y_train, x_val, y_val, x_test, y_test = preprocessing(
+            data, **preprocessing_param
+        )
 
-    return path
-
-
-def trainARDRegressorHP():
-    """
-        Trains an ARD regressor model with hyperparameter tuning using Halving Grid Search CV, and saves the best model.
-
-        Returns
-        -------
-        str
-            The path where the best ARD regressor model from hyperparameter tuning is saved.
-    """
-    print(param)
-    data = get_data(param["dataset"])
-    x_train, y_train, x_val, y_val, x_test, y_test = preprocessing_xg_boost(
-        data, **preprocessing_param
-    )
-
-    model = ARDRegression()
-    param_grid = {
-        "n_iter": [100, 300, 500, 1000, 1500],
-        "tol": [1e-3, 1e-4, 1e-5],
-        "alpha_1": [1e-6, 1e-7, 1e-8],
-        "alpha_2": [1e-6, 1e-7, 1e-8],
-        "lambda_1": [1e-6, 1e-7, 1e-8],
-        "lambda_2": [1e-6, 1e-7, 1e-8],
-        "compute_score": [True, False],
-    }
-    grid_search = HalvingGridSearchCV(
-        model,
-        param_grid,
-        cv=5,
-        verbose=2,
-        scoring=make_scorer(mean_squared_error, greater_is_better=False),
-    )
-    grid_search.fit(x_train, y_train)
-    print("Best parameters found: ", grid_search.best_params_)
-
-    best_model = grid_search.best_estimator_
-
-    path = get_path()
-    joblib.dump(best_model, os.path.join(path))
+        model = ARDRegression(**ard_param)
+        model.fit(x_train, y_train)
+        evaluate_sklearn_model(model=model, given_preprocessing_param=preprocessing_param)
+        path = get_path()
+        joblib.dump(
+            model, os.path.join(path)
+        )  # Speichern des Modells als ard_model.pkl im angegebenen Verzeichnis
 
     return path
 
@@ -358,69 +434,55 @@ def train_k_neighbors_regressor():
         str
             The path where the trained K-Neighbors regressor model is saved.
     """
-    data = get_data(param["dataset"])
-    x_train, y_train, x_val, y_val, x_test, y_test = preprocessing_xg_boost(
-        data, **preprocessing_param
-    )
+    with wandb.init(
+        project="CaseStudiesOfAIImplementation", entity="philippgrill"
+    ) as run:
+        now = datetime.now()
+        run.name = now.strftime("%d%m%Y%H%M%S")
+        dataset = wandb.config.get("dataset") or param.get("dataset")
+        data = get_data(dataset)
+        preprocessing_param = {
+            "test_size": get_value("test_size", "preprocessing"),
+            "val_size": get_value("val_size", "preprocessing"),
+            "columns": get_value("columns", "preprocessing"),
+            "shifts": get_value("shifts", "preprocessing"),
+            "neg_shifts": get_value("neg_shifts", "preprocessing"),
+            "enable_daytime_index": get_value("enable_daytime_index", "preprocessing"),
+            "monthly_cols": get_value("monthly_cols", "preprocessing"),
+            "keep_monthly_avg": get_value("keep_monthly_avg", "preprocessing"),
+            "daily_cols": get_value("daily_cols", "preprocessing"),
+            "keep_daily_avg": get_value("keep_daily_avg", "preprocessing"),
+            "load_lag": get_value("load_lag", "preprocessing"),
+        }
+        k_neighbors_param = {
+            "n_neighbors": get_value("n_neighbors", "k_neighbors"),
+            "p": get_value("p", "k_neighbors"),
+            "algorithm": get_value("algorithm", "k_neighbors"),
+            "leaf_size": get_value("leaf_size", "k_neighbors"),
+            "weights": get_value("weights", "k_neighbors"),
+        }
+        x_train, y_train, x_val, y_val, x_test, y_test = preprocessing(
+            data, **preprocessing_param
+        )
 
-    model = KNeighborsRegressor(
-        n_neighbors=100, weights="distance", algorithm="kd_tree", p=1, leaf_size=60
-    )
-    model.fit(x_train, y_train)
-    path = get_path()
-    joblib.dump(model, os.path.join(path))
+        model = KNeighborsRegressor(
+            **k_neighbors_param
+        )
+        model.fit(x_train, y_train)
+        evaluate_sklearn_model(model=model, given_preprocessing_param=preprocessing_param)
 
-    return path
-
-
-def train_k_neighbors_regressor_hp():
-    """
-        Trains a K-Neighbors regressor model with hyperparameter tuning using Halving Grid Search CV, and saves the best model.
-
-        Returns
-        -------
-        str
-            The path where the best K-Neighbors regressor model from hyperparameter tuning is saved.
-    """
-    data = get_data(param["dataset"])
-    x_train, y_train, x_val, y_val, x_test, y_test = preprocessing_xg_boost(
-        data, **preprocessing_param
-    )
-
-    model = KNeighborsRegressor()
-
-    param_grid = {
-        "n_neighbors": [20, 25, 50, 75, 100, 200],
-        "weights": ["uniform", "distance"],
-        "algorithm": ["auto", "ball_tree", "kd_tree", "brute"],
-        "p": [1, 2],
-        "leaf_size": [15, 30, 60, 90],
-    }
-
-    grid_search = HalvingGridSearchCV(
-        model,
-        param_grid,
-        cv=5,
-        verbose=2,
-        scoring=make_scorer(
-            mean_squared_error, greater_is_better=False
-        ),
-    )
-
-    grid_search.fit(x_train, y_train)
-    print("Best parameters found: ", grid_search.best_params_)
-    best_model = grid_search.best_estimator_
-    path = get_path()
-    joblib.dump(
-        best_model, os.path.join(path)
-    )  # Speichern des Modells als ard_model.pkl im angegebenen Verzeichnis
+        path = get_path()
+        joblib.dump(model, os.path.join(path))
 
     return path
 
 
 if __name__ == "__main__":
-    wandb.agent(getSweepIDXGBoost(), trainXGBRegressor)
-    # wandb.agent(getSweepIDXGBoost(), trainXGBRegressor)
+    # wandb.agent(get_sweep_k_neighbors(), train_k_neighbors_regressor)
+    # wandb.agent(get_sweep_ard(), train_ard_regressor)
+    # wandb.agent(get_sweep_id_xg_boost(), trainXGBRegressorWithCV)
+    # wandb.agent(getSweepIDLSTM(), train_lstm)
+    wandb.agent(get_sweep_id_xg_boost(), trainXGBRegressor)
     # trainLSTM()
     # trainXGBRegressor()
     # evaluateLSTMModel("..\models\model_2023-10-17_21-43-29.json")

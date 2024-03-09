@@ -108,7 +108,6 @@ parameters_dict_XGBoost = {
     "subsample": {"min": 0.1, "max": 1.0},
     "reg_alpha": {"min": 0.0, "max": 5.0},
     "reg_lambda": {"min": 0.0, "max": 5.0},
-    "n_estimators": {"min": 1000, "max": 2000},
     "tree_method": {"value": "exact"},
     "eval_metric": {"value": "mphe"},
     "test_size": {"value": 0.2},
@@ -121,19 +120,49 @@ parameters_dict_XGBoost = {
     "columns": features[dataset]["columns"],
 }
 parameters_dict_LSTM = {
-    "epochs": {"min": 3, "max": 30},
-    # "epochs": {
-    #     "values": [1]
-    # },
-    "batch_size": {"values": [1, 2, 4, 8, 16, 32, 64, 128, 256, 512, 1024]},
+    "epochs": {"min": 3, "max": 100},
+    "batch_size": {"values": [1024,16384]},
     "learning_rate": {"min": 0.0001, "max": 0.1},
     "dropout": {"min": 0.01, "max": 0.8},
     "shifts": {"min": 2, "max": 30},
     "enable_daytime_index": {"values": [True, False]},
-    "monthlyCols": features[dataset]["monthlyCols"],
-    "dailyCols": features[dataset]["dailyCols"],
-}
+    "monthly_cols": features[dataset]["monthlyCols"],
+    "daily_cols": features[dataset]["dailyCols"],
+    "columns": features[dataset]["columns"],
 
+}
+parameters_dict_ARD = {
+    "n_iter": {"values": [100, 300, 500, 1000, 1500]},
+    "tol": {"values": [1e-3, 1e-4, 1e-5]},
+    "alpha_1": {"values": [1e-6, 1e-7, 1e-8]},
+    "alpha_2": {"values": [1e-6, 1e-7, 1e-8]},
+    "lambda_1": {"values": [1e-6, 1e-7, 1e-8]},
+    "lambda_2": {"values": [1e-6, 1e-7, 1e-8]},
+    "compute_score": {"values": [True, False]},
+    "test_size": {"value": 0.2},
+    "shifts": {"min": 0, "max": 10},
+    "load_lag": {"min": 0, "max": 500},
+    "neg_shifts": {"min": -10, "max": 0},
+    "enable_daytime_index": {"values": [True, False]},
+    "monthly_cols": features[dataset]["monthlyCols"],
+    "daily_cols": features[dataset]["dailyCols"],
+    "columns": features[dataset]["columns"],
+}
+parameters_dict_k_neighbors = {
+    "n_neighbors": {"values": [100, 300, 500]},
+    "p":  {"values": [1, 2]},
+    "algorithm": {"values": ["kd_tree", "ball_tree","auto"]},
+    "weights": {"values": ["distance", "uniform"]},
+    "leaf_size": {"min": 30, "max": 100},
+    "test_size": {"value": 0.2},
+    "shifts": {"min": 0, "max": 10},
+    "load_lag": {"min": 0, "max": 500},
+    "neg_shifts": {"min": -10, "max": 0},
+    "enable_daytime_index": {"values": [True, False]},
+    "monthly_cols": features[dataset]["monthlyCols"],
+    "daily_cols": features[dataset]["dailyCols"],
+    "columns": features[dataset]["columns"],
+}
 
 def getSweepIDLSTM():
     sweep_config["parameters"] = parameters_dict_LSTM
@@ -145,8 +174,26 @@ def getSweepIDLSTM():
     return sweep_id
 
 
-def getSweepIDXGBoost():
+def get_sweep_id_xg_boost():
     sweep_config["parameters"] = parameters_dict_XGBoost
+    sweep_id = wandb.sweep(
+        sweep=sweep_config,
+        project="CaseStudiesOfAIImplementation",
+        entity="philippgrill",
+    )
+    return sweep_id
+
+def get_sweep_ard():
+    sweep_config["parameters"] = parameters_dict_ARD
+    sweep_id = wandb.sweep(
+        sweep=sweep_config,
+        project="CaseStudiesOfAIImplementation",
+        entity="philippgrill",
+    )
+    return sweep_id
+
+def get_sweep_k_neighbors():
+    sweep_config["parameters"] = parameters_dict_k_neighbors
     sweep_id = wandb.sweep(
         sweep=sweep_config,
         project="CaseStudiesOfAIImplementation",

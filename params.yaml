@@ -1,4 +1,4 @@
-dataset : 'loadCurveOneFull'
+dataset : 'loadCurveTwoFull'
 XGBRegressorModelParams:
   n_estimators: 1500
   max_depth: 6
@@ -31,13 +31,21 @@ LSTMpreprocessing:
   test_size: 0.2
   shifts: 10
   enable_daytime_index: True
-  monthlyCols: [ 't1' , 'r1' ]
-  keepMonthlyAvg: [ True, True, True, True ]
-  dailyCols: [ 't1' , 'r1' ]
-  keepDailyAvg: [ True, True , True, True]
+  monthly_cols: [ 't1' , 'r1' ]
+  keep_monthly_avg: [ True, True, True, True ]
+  daily_cols: [ 't1' , 'r1' ]
+  keep_daily_avg: [ True, True , True, True]
 LSTM_model_params:
   epochs: 6
   batch_size: 32
   learning_rate: 0.001
   metrics: 'mae'
   dropout: 0.2
+ard:
+  alpha_1: 1e-08
+  alpha_2: 1e-08
+  compute_score: True
+  lambda_1: 1e-07
+  lambda_2: 1e-08
+  n_iter: 1000
+  tol: 0.001

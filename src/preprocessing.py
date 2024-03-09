@@ -117,14 +117,17 @@ def preprocessing_lstm(
     )
     x_test_scaler = StandardScaler()
     x_train_scaler = StandardScaler()
-    # todo one norm
+    x_val_scaler = StandardScaler()
     x_test = pd.DataFrame(x_test_scaler.fit_transform(x_test.to_numpy()))
     x_train = pd.DataFrame(x_train_scaler.fit_transform(x_train.to_numpy()))
+    x_val = pd.DataFrame(x_val_scaler.fit_transform(x_val.to_numpy()))
     return (
-        prepare_data_lstm(x_test, shifts),
-        y_test.iloc[: -shifts + 1],
         prepare_data_lstm(x_train, shifts),
         y_train.iloc[: -shifts + 1],
+        prepare_data_lstm(x_val, shifts),
+        y_val.iloc[: -shifts + 1],
+        prepare_data_lstm(x_test, shifts),
+        y_test.iloc[: -shifts + 1],
     )
 
 
@@ -238,7 +241,7 @@ def add_rolling_average_electric_load(df, column, window_size):
     return df
 
 
-def preprocessing_xg_boost(
+def preprocessing(
     data,
     test_size,
     val_size,
@@ -298,6 +301,7 @@ def preprocessing_xg_boost(
     data = sliding_window(data, columns, shifts, neg_shifts)
     print(f"load_lag= {load_lag}")
     data = add_rolling_average_electric_load(data, "electricLoad", load_lag)
+    data = data.dropna()
     data = split_data(data, "electricLoad", test_size, val_size)
     return data
 

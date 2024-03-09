@@ -1,0 +1,18 @@
+repos:
+  - repo: local
+    hooks:
+      - id: black
+        name: black
+        description: Run black from currently activated python environment.
+        entry: black .
+        language: python
+        types: [python]
+        always_run: true
+  - repo: local
+    hooks:
+      - id: isort
+        name: isort (python)
+        description: Run isort from currently activated python environment.
+        entry: isort
+        language: python
+
