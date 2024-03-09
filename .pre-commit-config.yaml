@@ -1,18 +1,15 @@
 repos:
-  - repo: local
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v3.4.0  # Verwende die neueste Version
+    hooks:
+      - id: trailing-whitespace
+      - id: end-of-file-fixer
+      - id: check-yaml
+      - id: check-added-large-files
+
+  - repo: https://github.com/psf/black
+    rev: 22.3.0  # Verwende die neueste Version von Black
     hooks:
       - id: black
-        name: black
-        description: Run black from currently activated python environment.
-        entry: black .
-        language: python
-        types: [python]
-        always_run: true
-  - repo: local
-    hooks:
-      - id: isort
-        name: isort (python)
-        description: Run isort from currently activated python environment.
-        entry: isort
-        language: python
-
+        language_version: python3
+        files: ^src/

@@ -1,9 +1,10 @@
+from datetime import datetime
+
 import numpy as np
 import pandas as pd
-from sklearn.preprocessing import StandardScaler
-from datetime import datetime
-from astral.sun import sun
 from astral import LocationInfo
+from astral.sun import sun
+from sklearn.preprocessing import StandardScaler
 
 
 def sliding_window(df, columns, shifts, neg_shifts):
