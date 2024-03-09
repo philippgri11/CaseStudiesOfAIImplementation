@@ -1,7 +1,9 @@
 import pandas as pd
 
 
-def read_load_curve_to_dataframe(file_path, sep=";", decimal=",", include_additional_columns=False):
+def read_load_curve_to_dataframe(
+    file_path, sep=";", decimal=",", include_additional_columns=False
+):
     """
     Reads a CSV file containing electric load data and converts it to a DataFrame.
 
@@ -23,7 +25,9 @@ def read_load_curve_to_dataframe(file_path, sep=";", decimal=",", include_additi
     """
     column_names = ["startDate", "endDate", "electricLoad"]
     if include_additional_columns:
-        column_names.extend(["t1", "t2", "r1", "r2"])  # Adjust based on actual additional columns needed
+        column_names.extend(
+            ["t1", "t2", "r1", "r2"]
+        )  # Adjust based on actual additional columns needed
 
     df = pd.read_csv(file_path, sep=sep, decimal=decimal, header=0, names=column_names)
 
@@ -69,7 +73,9 @@ def get_data(dataset):
 
     file_path = file_map[dataset]
     include_additional_columns = "Two" in dataset or "Three" in dataset
-    load_curve = read_load_curve_to_dataframe(file_path, include_additional_columns=include_additional_columns)
+    load_curve = read_load_curve_to_dataframe(
+        file_path, include_additional_columns=include_additional_columns
+    )
 
     holiday = read_holiday_to_dataframe("../data/holiday.csv")
     return merge_holiday_and_load_curve(holiday, load_curve)

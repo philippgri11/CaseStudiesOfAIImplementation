@@ -121,7 +121,7 @@ parameters_dict_XGBoost = {
 }
 parameters_dict_LSTM = {
     "epochs": {"min": 3, "max": 100},
-    "batch_size": {"values": [1024,16384]},
+    "batch_size": {"values": [1024, 16384]},
     "learning_rate": {"min": 0.0001, "max": 0.1},
     "dropout": {"min": 0.01, "max": 0.8},
     "shifts": {"min": 2, "max": 30},
@@ -129,7 +129,6 @@ parameters_dict_LSTM = {
     "monthly_cols": features[dataset]["monthlyCols"],
     "daily_cols": features[dataset]["dailyCols"],
     "columns": features[dataset]["columns"],
-
 }
 parameters_dict_ARD = {
     "n_iter": {"values": [100, 300, 500, 1000, 1500]},
@@ -150,8 +149,8 @@ parameters_dict_ARD = {
 }
 parameters_dict_k_neighbors = {
     "n_neighbors": {"values": [100, 300, 500]},
-    "p":  {"values": [1, 2]},
-    "algorithm": {"values": ["kd_tree", "ball_tree","auto"]},
+    "p": {"values": [1, 2]},
+    "algorithm": {"values": ["kd_tree", "ball_tree", "auto"]},
     "weights": {"values": ["distance", "uniform"]},
     "leaf_size": {"min": 30, "max": 100},
     "test_size": {"value": 0.2},
@@ -163,6 +162,7 @@ parameters_dict_k_neighbors = {
     "daily_cols": features[dataset]["dailyCols"],
     "columns": features[dataset]["columns"],
 }
+
 
 def getSweepIDLSTM():
     sweep_config["parameters"] = parameters_dict_LSTM
@@ -183,6 +183,7 @@ def get_sweep_id_xg_boost():
     )
     return sweep_id
 
+
 def get_sweep_ard():
     sweep_config["parameters"] = parameters_dict_ARD
     sweep_id = wandb.sweep(
@@ -191,6 +192,7 @@ def get_sweep_ard():
         entity="philippgrill",
     )
     return sweep_id
+
 
 def get_sweep_k_neighbors():
     sweep_config["parameters"] = parameters_dict_k_neighbors
