@@ -2,6 +2,7 @@ import os
 from datetime import datetime
 
 import joblib
+import numpy as np
 import pandas as pd
 import tensorflow as tf
 import xgboost as xgb
@@ -9,8 +10,14 @@ import yaml
 from sklearn.experimental import enable_halving_search_cv
 from sklearn.linear_model import ARDRegression, BayesianRidge
 from sklearn.metrics import make_scorer, mean_squared_error
-from sklearn.model_selection import HalvingGridSearchCV
+from sklearn.model_selection import (
+    HalvingGridSearchCV,
+    cross_val_score,
+    KFold,
+    cross_validate,
+)
 from sklearn.neighbors import KNeighborsRegressor
+from wandb import sweep
 from wandb.integration.xgboost import WandbCallback
 from wandb.keras import WandbCallback as WandbCallbackKeras
 
@@ -24,6 +31,8 @@ from sweep_config import (
     get_sweep_k_neighbors,
     getSweepIDLSTM,
 )
+
+max_runs = 31
 
 with open("../params.yaml", "r") as file:
     param = yaml.safe_load(file)
@@ -64,11 +73,14 @@ def trainXGBRegressor():
     str
         The path where the trained model is saved.
     """
+    project = "CaseStudiesOfAIImplementationResults"
+    entity = "philippgrill"
     with wandb.init(
-        project="CaseStudiesOfAIImplementation", entity="philippgrill"
+        project="CaseStudiesOfAIImplementationResults", entity="philippgrill"
     ) as run:
-        now = datetime.now()
-        run.name = now.strftime("%d%m%Y%H%M%S")
+        if setup_sweep(entity, project, run):
+            return
+
         with open("../params.yaml", "r") as file:
             param = yaml.safe_load(file)
         dataset = wandb.config.get("dataset") or param.get("dataset")
@@ -129,6 +141,18 @@ def trainXGBRegressor():
         return path
 
 
+def setup_sweep(entity, project, run):
+    api = wandb.Api()
+    sweep = api.sweep(f"{entity}/{project}/{run.sweep_id}")
+    now = datetime.now()
+    run.name = now.strftime("%d%m%Y%H%M%S")
+    if len(sweep.runs) > max_runs:
+        command = f"wandb sweep --stop {run.sweep_id}"
+        os.system(command)
+        return True
+    return False
+
+
 def trainXGBRegressorWithCV():
     """
     Trains an XGBoost regressor model with Cross-Validation to determine the best hyperparameters,
@@ -139,11 +163,12 @@ def trainXGBRegressorWithCV():
     str
         The path where the trained model is saved.
     """
-    with wandb.init(
-        project="CaseStudiesOfAIImplementation", entity="philippgrill"
-    ) as run:
-        now = datetime.now()
-        run.name = now.strftime("%d%m%Y%H%M%S")
+    entity = "philippgrill"
+    project = "CaseStudiesOfAIImplementationResults"
+    with wandb.init(project=project, entity=entity) as run:
+        if setup_sweep(entity, project, run):
+            return
+
         with open("../params.yaml", "r") as file:
             param = yaml.safe_load(file)
 
@@ -195,37 +220,22 @@ def trainXGBRegressorWithCV():
             dtrain_full,
             num_boost_round=get_value("n_estimators", "XGBRegressorModelParams"),
             nfold=5,
-            metrics="mphe",
+            metrics="rmse",
             early_stopping_rounds=10,
             stratified=False,
             seed=42,
-            callbacks=[xgb.callback.EvaluationMonitor(show_stdv=True)],
+            # callbacks=[xgb.callback.EvaluationMonitor(show_stdv=True)],
         )
         for metric in cv_results:
-            for fold in range(len(cv_results[metric])):
-                wandb.log({f"{metric}_fold_{fold}": cv_results[metric][fold]})
+            for fold_index, value in enumerate(cv_results[metric]):
+                wandb.log({metric: value})
 
-        # Now train the final model on the full dataset (train + validation)
-        model = xgb.XGBRegressor(
-            **xgb_regressor_model_params,
-            n_estimators=get_value("n_estimators", "XGBRegressorModelParams"),
+        wandb.log(
+            {
+                "mse_cv": cv_results["test-rmse-mean"].tail(1).item()
+                * cv_results["test-rmse-mean"].tail(1).item(),
+            }
         )
-
-        model.fit(
-            x_train,
-            y_train,
-            verbose=True,
-            eval_set=[(x_val, y_val)],
-            callbacks=[WandbCallback()],
-        )
-
-        # Save the model
-        path = get_path()
-        model.save_model(path)
-
-        # Evaluate the final model
-        evaluate_xgb_model(model=model, given_preprocessing_param=preprocessing_param)
-        return path
 
 
 def get_path():
@@ -256,7 +266,7 @@ def train_dnn():
         The path where the trained DNN model is saved.
     """
     with wandb.init(
-        project="CaseStudiesOfAIImplementation", entity="philippgrill"
+        project="CaseStudiesOfAIImplementationResults", entity="philippgrill"
     ) as run:
         data = get_data(param["dataset"])
         x_train, y_train, x_val, y_val, x_test, y_test = preprocessing(
@@ -294,7 +304,7 @@ def train_dnn():
         return path
 
 
-def train_lstm():
+def train_lstm(cv=True):
     """
     Trains a Long Short-Term Memory (LSTM) model, evaluates the model, logs the evaluation metrics to Weights & Biases, and saves the model.
 
@@ -303,11 +313,11 @@ def train_lstm():
     str
         The path where the trained LSTM model is saved.
     """
-    with wandb.init(
-        project="CaseStudiesOfAIImplementation", entity="philippgrill"
-    ) as run:
-        now = datetime.now()
-        run.name = now.strftime("%d%m%Y%H%M%S")
+    entity = "philippgrill"
+    project = "CaseStudiesOfAIImplementationResults"
+    with wandb.init(project=project, entity=entity) as run:
+        if setup_sweep(entity, project, run):
+            return
         dataset = wandb.config.get("dataset") or param.get("dataset")
         data = get_data(dataset)
         lstm_preprocessing = {
@@ -318,7 +328,7 @@ def train_lstm():
             ),
             "monthly_cols": get_value("monthly_cols", "LSTMpreprocessing"),
             "keep_monthly_avg": get_value("keep_monthly_avg", "LSTMpreprocessing"),
-            "daily_cols": get_value("dailyCols", "LSTMpreprocessing"),
+            "daily_cols": get_value("daily_cols", "LSTMpreprocessing"),
             "keep_daily_avg": get_value("keep_daily_avg", "LSTMpreprocessing"),
         }
         lstm_model_params = {
@@ -347,46 +357,88 @@ def train_lstm():
             data, **lstm_preprocessing
         )
         n_timesteps, n_features = x_train.shape[1], x_train.shape[2]
-        model = tf.keras.models.Sequential(
-            [
-                tf.keras.layers.LSTM(
-                    64, input_shape=(n_timesteps, n_features), return_sequences=True
-                ),
-                tf.keras.layers.Dropout(lstm_model_params["dropout"]),
-                tf.keras.layers.LSTM(32),
-                tf.keras.layers.Dropout(lstm_model_params["dropout"]),
-                tf.keras.layers.Dense(1),
-            ]
-        )
+        model = build_lstm_model((n_timesteps, n_features))
+        if cv:
+            n_splits = 5
+            kf = KFold(n_splits=n_splits, shuffle=False)
 
-        model.compile(
-            optimizer=tf.keras.optimizers.legacy.Adam(
-                learning_rate=lstm_model_params["learning_rate"]
-            ),
-            loss=tf.keras.losses.Huber(),
-            metrics=lstm_model_params["metrics"],
-        )
+            fold = 0
+            x_train_full = np.concatenate([x_train, x_val], axis=0)
+            y_train_full = np.concatenate([y_train, y_val], axis=0)
+            mse = 0
+            for train_index, val_index in kf.split(x_train_full):
+                print(f"Training fold {fold + 1}/{n_splits}...")
+                x_train_fold, x_val_fold = (
+                    x_train_full[train_index],
+                    x_train_full[val_index],
+                )
+                y_train_fold, y_val_fold = (
+                    y_train_full[train_index],
+                    y_train_full[val_index],
+                )
 
-        model.fit(
-            x_train,
-            y_train,
-            epochs=lstm_model_params["epochs"],
-            batch_size=lstm_model_params["batch_size"],
-            validation_data=(x_test, y_test),
-            callbacks=[WandbCallbackKeras(), early_stopping],
-        )
-        evaluation = model.evaluate(x_test, y_test)
-        print(f"Evaluation Loss: {evaluation}")
-        path = get_path()
-        model.save(path)
-        mse = evaluate_lstm_model(
-            model=model, givenPreprocessingParam=lstm_preprocessing
-        )
-        wandb.log({"mse": mse})
-        return path
+                model = build_lstm_model(x_train.shape[1:], **lstm_model_params)
+
+                model.fit(
+                    x_train_fold,
+                    y_train_fold,
+                    validation_data=(x_val_fold, y_val_fold),
+                    callbacks=[WandbCallbackKeras(), early_stopping],
+                    epochs=lstm_model_params["epochs"],
+                )
+                mse += evaluate_lstm_model(
+                    model=model,
+                    givenPreprocessingParam=lstm_preprocessing,
+                    x_val_given=x_val_fold,
+                    y_val_given=y_val_fold.tolist(),
+                )
+                wandb.log({f"mse_fold_{fold + 1}/{n_splits}": mse})
+                fold += 1
+            wandb.log({"mse_cv": mse / n_splits})
+            return None
+
+        else:
+            model.fit(
+                x_train,
+                y_train,
+                epochs=lstm_model_params["epochs"],
+                batch_size=lstm_model_params["batch_size"],
+                validation_data=(x_test, y_test),
+                callbacks=[WandbCallbackKeras(), early_stopping],
+            )
+            evaluation = model.evaluate(x_test, y_test)
+            print(f"Evaluation Loss: {evaluation}")
+            path = get_path()
+            model.save(path)
+            mse = evaluate_lstm_model(
+                model=model, givenPreprocessingParam=lstm_preprocessing
+            )
+            wandb.log({"mse": mse})
+            return path
 
 
-def train_ard_regressor():
+def build_lstm_model(input_shape, **params):
+    model = tf.keras.models.Sequential(
+        [
+            tf.keras.layers.LSTM(64, input_shape=input_shape, return_sequences=True),
+            tf.keras.layers.Dropout(lstm_model_params["dropout"]),
+            tf.keras.layers.LSTM(32),
+            tf.keras.layers.Dropout(lstm_model_params["dropout"]),
+            tf.keras.layers.Dense(1),
+        ]
+    )
+
+    model.compile(
+        optimizer=tf.keras.optimizers.legacy.Adam(
+            learning_rate=lstm_model_params["learning_rate"]
+        ),
+        loss=tf.keras.losses.Huber(),
+        metrics=lstm_model_params["metrics"],
+    )
+    return model
+
+
+def train_ard_regressor(cv=True):
     """
     Trains an Automatic Relevance Determination (ARD) regressor model, and saves it.
 
@@ -395,11 +447,11 @@ def train_ard_regressor():
     str
         The path where the trained ARD regressor model is saved.
     """
-    with wandb.init(
-        project="CaseStudiesOfAIImplementation", entity="philippgrill"
-    ) as run:
-        now = datetime.now()
-        run.name = now.strftime("%d%m%Y%H%M%S")
+    entity = "philippgrill"
+    project = "CaseStudiesOfAIImplementationResults"
+    with wandb.init(project=project, entity=entity) as run:
+        if setup_sweep(entity, project, run):
+            return
         dataset = wandb.config.get("dataset") or param.get("dataset")
         data = get_data(dataset)
         preprocessing_param = {
@@ -430,19 +482,22 @@ def train_ard_regressor():
         )
 
         model = ARDRegression(**ard_param)
-        model.fit(x_train, y_train)
-        evaluate_sklearn_model(
-            model=model, given_preprocessing_param=preprocessing_param
-        )
-        path = get_path()
-        joblib.dump(
-            model, os.path.join(path)
-        )  # Speichern des Modells als ard_model.pkl im angegebenen Verzeichnis
+        if cv:
+            cv_sklearn_model(x_train, y_train, x_val, y_val, model)
+            return None
+        else:
+            model.fit(x_train, y_train)
+            evaluate_sklearn_model(
+                model=model, given_preprocessing_param=preprocessing_param
+            )
+            path = get_path()
+            joblib.dump(
+                model, os.path.join(path)
+            )  # Speichern des Modells als ard_model.pkl im angegebenen Verzeichnis
+            return path
 
-    return path
 
-
-def train_k_neighbors_regressor():
+def train_k_neighbors_regressor(cv=True):
     """
     Trains a K-Neighbors regressor model, and saves it.
 
@@ -451,11 +506,11 @@ def train_k_neighbors_regressor():
     str
         The path where the trained K-Neighbors regressor model is saved.
     """
-    with wandb.init(
-        project="CaseStudiesOfAIImplementation", entity="philippgrill"
-    ) as run:
-        now = datetime.now()
-        run.name = now.strftime("%d%m%Y%H%M%S")
+    entity = "philippgrill"
+    project = "CaseStudiesOfAIImplementationResults"
+    with wandb.init(project=project, entity=entity) as run:
+        if setup_sweep(entity, project, run):
+            return
         dataset = wandb.config.get("dataset") or param.get("dataset")
         data = get_data(dataset)
         preprocessing_param = {
@@ -483,23 +538,59 @@ def train_k_neighbors_regressor():
         )
 
         model = KNeighborsRegressor(**k_neighbors_param)
-        model.fit(x_train, y_train)
-        evaluate_sklearn_model(
-            model=model, given_preprocessing_param=preprocessing_param
-        )
+        if cv:
+            cv_sklearn_model(x_train, y_train, x_val, y_val, model)
+            return None
+        else:
+            model.fit(x_train, y_train)
+            evaluate_sklearn_model(
+                model=model, given_preprocessing_param=preprocessing_param
+            )
 
-        path = get_path()
-        joblib.dump(model, os.path.join(path))
+            path = get_path()
+            joblib.dump(model, os.path.join(path))
+            return path
 
-    return path
+
+def cv_sklearn_model(x_train, y_train, x_val, y_val, model):
+    x_train_full = np.concatenate([x_train, x_val], axis=0)
+    y_train_full = np.concatenate([y_train, y_val], axis=0)
+    scores = cross_validate(
+        model, x_train_full, y_train_full, cv=5, scoring="neg_mean_squared_error"
+    )
+    mean_score = -np.mean(scores["test_score"])
+    wandb.log({"mse_cv": mean_score})
+    for score in scores["test_score"]:
+        wandb.log({"test_score": -score})
+
+
+def switch_dataset(dataset: str):
+    with open("../params.yaml", "r") as file:
+        data = yaml.safe_load(file)
+    data["dataset"] = dataset
+    with open("../params.yaml", "w") as file:
+        yaml.safe_dump(data, file)
+
+    with open("../params.yaml", "r") as file:
+        global param
+        param = yaml.safe_load(file)
+        global xgb_regressor_model_params
+        xgb_regressor_model_params = param["XGBRegressorModelParams"]
+        global dnn_model_params
+        dnn_model_params = param["DNN_model_params"]
+        global preprocessing_param
+        preprocessing_param = param["preprocessing"]
+        global lstm_preprocessing
+        lstm_preprocessing = param["LSTMpreprocessing"]
+        global lstm_model_params
+        lstm_model_params = param["LSTM_model_params"]
 
 
 if __name__ == "__main__":
-    # wandb.agent(get_sweep_k_neighbors(), train_k_neighbors_regressor)
-    # wandb.agent(get_sweep_ard(), train_ard_regressor)
-    # wandb.agent(get_sweep_id_xg_boost(), trainXGBRegressorWithCV)
-    # wandb.agent(getSweepIDLSTM(), train_lstm)
-    wandb.agent(get_sweep_id_xg_boost(), trainXGBRegressor)
-    # trainLSTM()
-    # trainXGBRegressor()
-    # evaluateLSTMModel("..\models\model_2023-10-17_21-43-29.json")
+    datasets = ["loadCurveOneFull", "loadCurveTwoFull", "loadCurveThreeFull"]
+    for dataset in datasets:
+        switch_dataset(dataset)
+        wandb.agent(get_sweep_k_neighbors(), train_k_neighbors_regressor)
+        wandb.agent(get_sweep_ard(), train_ard_regressor)
+        wandb.agent(getSweepIDLSTM(), train_lstm)
+        # wandb.agent(get_sweep_id_xg_boost(), trainXGBRegressorWithCV)

@@ -397,8 +397,8 @@ def daily_diff(df, cols, keep_avg):
             "avg_" + col + "_day"
         ].shift(96)
         df.fillna(0, inplace=True)
-        if not keep_avg[i]:
-            df.drop("avg_" + col + "_day", axis=1, inplace=True)
+        # if not keep_avg[i]:
+        #     df.drop("avg_" + col + "_day", axis=1, inplace=True)
         i += 1
     df.drop("date_str_day", axis=1, inplace=True)
     return df
@@ -437,8 +437,8 @@ def monthly_diff(df, cols, keepAvg):
             "avg_" + col + "_month"
         ].shift(96 * 30)
         df.fillna(0, inplace=True)
-        if not keepAvg[i]:
-            df.drop("avg_" + col + "_month", axis=1, inplace=True)
+        # if not keepAvg[i]:
+        #     df.drop("avg_" + col + "_month", axis=1, inplace=True)
         i += 1
     df.drop("date_str_month", axis=1, inplace=True)
     return df

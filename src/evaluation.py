@@ -11,10 +11,24 @@ import wandb
 from load_data import get_data
 from preprocessing import preprocessing, preprocessing_lstm
 
-with open("../params.yaml", "r") as file:
-    param = yaml.safe_load(file)
-    defaultPreprocessingParam = param["preprocessing"]
-    lstm_preprocessing = param["LSTMpreprocessing"]
+
+def get_param():
+    with open("../params.yaml", "r") as file:
+        return yaml.safe_load(file)
+        defaultPreprocessingParam = param["preprocessing"]
+        lstm_preprocessing = param["LSTMpreprocessing"]
+
+
+def get_default_preprocessing_param():
+    with open("../params.yaml", "r") as file:
+        param = yaml.safe_load(file)
+        return param["preprocessing"]
+
+
+def get_lstm_preprocessing():
+    with open("../params.yaml", "r") as file:
+        param = yaml.safe_load(file)
+        return param["LSTMpreprocessing"]
 
 
 def evaluate_sklearn_model(path=None, model=None, given_preprocessing_param=None):
@@ -40,7 +54,8 @@ def evaluate_sklearn_model(path=None, model=None, given_preprocessing_param=None
     if given_preprocessing_param is not None:
         preprocessing_param = given_preprocessing_param
     else:
-        preprocessing_param = defaultPreprocessingParam
+        param = get_param()
+        preprocessing_param = get_default_preprocessing_param()
     x_train, y_train, x_val, y_val, x_test, y_test = preprocessing(
         get_data(param["dataset"]), **preprocessing_param
     )
@@ -70,13 +85,21 @@ def evaluate_dnn_model(path):
     """
     loaded_model = tf.keras.models.load_model(path)
     x_train, y_train, x_val, y_val, x_test, y_test = preprocessing(
-        get_data(param["dataset"]), **defaultPreprocessingParam
+        get_data(get_param()["dataset"]), **get_default_preprocessing_param()
     )
     predictedLabels = loaded_model.predict(x_test)
     return evaluate_model(predictedLabels, y_test)
 
 
-def evaluate_lstm_model(path=None, model=None, givenPreprocessingParam=None):
+def evaluate_lstm_model(
+    path=None,
+    model=None,
+    givenPreprocessingParam=None,
+    x_val_given=None,
+    y_val_given=None,
+    x_test_given=None,
+    y_test_given=None,
+):
     """
     Evaluates an LSTM model using test data, with optional model loading and preprocessing parameters.
 
@@ -96,13 +119,20 @@ def evaluate_lstm_model(path=None, model=None, givenPreprocessingParam=None):
     """
     if model is None:
         model = tf.keras.models.load_model(path)
-    data = get_data(param["dataset"])
-    preprocessing_params = givenPreprocessingParam or lstm_preprocessing
+    data = get_data(get_param()["dataset"])
+    preprocessing_params = givenPreprocessingParam or get_lstm_preprocessing()
     x_train, y_train, x_val, y_val, x_test, y_test = preprocessing_lstm(
         data, **preprocessing_params
     )
-    predicted_labels = model.predict(x_test)
-    return evaluate_model(predicted_labels, y_test)
+    if x_val_given is not None and y_val_given is not None:
+        x_val = x_val_given
+        y_val = y_val_given
+    if x_test_given is not None and y_test_given is not None:
+        x_test = x_test_given
+        y_test = y_test_given
+    predicted_labels_val = model.predict(x_val)
+    predicted_labels_test = model.predict(x_test)
+    return evaluate_model(predicted_labels_test, y_test, predicted_labels_val, y_val)
 
 
 def evaluate_xgb_model(path=None, model=None, given_preprocessing_param=None):
@@ -126,9 +156,9 @@ def evaluate_xgb_model(path=None, model=None, given_preprocessing_param=None):
     if model is None:
         model = xgb.XGBRegressor()
         model.load_model(path)
-    preprocessingParams = given_preprocessing_param or defaultPreprocessingParam
+    preprocessingParams = given_preprocessing_param or get_default_preprocessing_param()
     xTrain, yTrain, xVal, yVal, xTest, yTest = preprocessing(
-        get_data(param["dataset"]), **preprocessingParams
+        get_data(get_param()["dataset"]), **preprocessingParams
     )
     predictedLabelsTest = model.predict(xTest)
     predictedLabelsVal = model.predict(xVal)
@@ -164,26 +194,26 @@ def evaluate_model(
     if y_test is None:
         # This is a placeholder for your data preprocessing function
         x_train, y_train, x_val, y_val, x_test, y_test = preprocessing(
-            get_data(param["dataset"]), **defaultPreprocessingParam
+            get_data(get_param()["dataset"]), **get_default_preprocessing_param()
         )
 
     # Calculate metrics
-    residuals_test = y_test.to_numpy() - predictedLabelsTest
+    residuals_test = np.asarray(y_test) - predictedLabelsTest
     residuals_val = (
-        y_val.to_numpy() - predictedLabelsVal
+        np.asarray(y_val) - predictedLabelsVal
         if predictedLabelsVal is not None
         else None
     )
 
-    mse_test = mean_squared_error(y_test.to_numpy(), predictedLabelsTest)
+    mse_test = mean_squared_error(np.asarray(y_test), predictedLabelsTest)
     mse_val = (
-        mean_squared_error(y_val.to_numpy(), predictedLabelsVal)
+        mean_squared_error(np.asarray(y_val), predictedLabelsVal)
         if predictedLabelsVal is not None
         else None
     )
     rmse_test = np.sqrt(mse_test)
-    mae_test = mean_absolute_error(y_test.to_numpy(), predictedLabelsTest)
-    r2_test = r2_score(y_test.to_numpy(), predictedLabelsTest)
+    mae_test = mean_absolute_error(np.asarray(y_test), predictedLabelsTest)
+    r2_test = r2_score(np.asarray(y_test), predictedLabelsTest)
 
     variance_residuals_test = np.var(residuals_test)
     variance_residuals_val = (
