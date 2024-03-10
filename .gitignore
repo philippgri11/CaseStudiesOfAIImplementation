@@ -127,3 +127,5 @@ dmypy.json
 
 src/wandb/
 /models/
+
+.DS_Store

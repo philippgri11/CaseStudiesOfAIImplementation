@@ -14,11 +14,11 @@ repos:
         language_version: python3
         files: ^src/
 
-  - repo: local
-    hooks:
-        - id: update-sphinx-docs
-          name: Update Sphinx Documentation
-          entry: ./update_docs.sh
-          language: script
-          always_run: true
-          verbose: true
+#  - repo: local
+#    hooks:
+#        - id: update-sphinx-docs
+#          name: Update Sphinx Documentation
+#          entry: ./update_docs.sh
+#          language: script
+#          always_run: true
+#          verbose: true
