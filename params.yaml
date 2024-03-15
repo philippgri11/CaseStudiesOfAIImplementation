@@ -1,43 +1,137 @@
-dataset : 'loadCurveOneFull'
-XGBRegressorModelParams:
-  n_estimators: 1500
-  max_depth: 6
-  learning_rate: 0.005
-  colsample_bytree: 0.9
-  min_child_weight: 4
-  tree_method: 'exact'
-  eval_metric: 'mphe'
-  subsample: 0.9
-  reg_alpha: 0.5
-  reg_lambda: 1.5
 DNN_model_params:
-  epochs: 6
+  activation: relu
   batch_size: 1024
-  optimizer: 'adam'
-  loss: 'mse'
-  activation: 'relu'
-preprocessing:
+  epochs: 6
+  loss: mse
+  optimizer: adam
+LSTM_model_params:
+  batch_size: 32
+  dropout: 0.2
+  epochs: 6
+  learning_rate: 0.001
+  metrics:
+  - mae
+  - mse
+LSTMpreprocessing:
+  enable_daytime_index: true
+  keep_daily_avg:
+  - false
+  - false
+  - false
+  - false
+  keep_monthly_avg:
+  - false
+  - false
+  - false
+  - false
+  shifts: 10
+  test_size: 0.2
+XGBRegressorModelParams:
+  colsample_bytree: 0.9
+  eval_metric: mphe
+  learning_rate: 0.005
+  max_depth: 10
+  min_child_weight: 10
+  n_estimators: 1500
+  reg_alpha: 0.7147923472921636
+  reg_lambda: 2.952929089766476
+  subsample: 0.30356074671129324
+  tree_method: exact
+ard:
+  alpha_1: 1e-08
+  alpha_2: 1e-08
+  compute_score: true
+  lambda_1: 1e-07
+  lambda_2: 1e-08
+  n_iter: 1000
+  tol: 0.001
+best_preprocessing_lc1:
+  columns: []
+  daily_cols: []
+  enable_day_of_week_index: false
+  enable_daytime_index: false
+  keep_daily_avg:
+  - true
+  - true
+  - true
+  - true
+  keep_monthly_avg:
+  - true
+  - true
+  - true
+  - true
+  monthly_cols: []
+  neg_shifts: 0
+  shifts: 6
   test_size: 0.2
   val_size: 0.1
-  colums: [ 't1' , 'r1',  'holiday', 'schoolHoliday']
-  shifts: 3
-  negShifts: -3
-  enable_daytime_index: True
-  monthlyCols: [ 't1' , 'r1' ]
-  keepMonthlyAvg: [True, True, True, True]
-  dailyCols: [ 't1' , 'r1' ]
-  keepDailyAvg: [ True, True, True, True]
-LSTMpreprocessing:
+best_preprocessing_lc2:
+  columns:
+  - t1
+  - t2
+  daily_cols:
+  - t2
+  enable_day_of_week_index: true
+  enable_daytime_index: false
+  keep_daily_avg:
+  - true
+  - true
+  - true
+  - true
+  keep_monthly_avg:
+  - true
+  - true
+  - true
+  - true
+  monthly_cols:
+  - r2
+  neg_shifts: -8
+  shifts: 6
   test_size: 0.2
-  shifts: 10
-  enable_daytime_index: True
-  monthlyCols: [ 't1' , 'r1' ]
-  keepMonthlyAvg: [ True, True, True, True ]
-  dailyCols: [ 't1' , 'r1' ]
-  keepDailyAvg: [ True, True , True, True]
-LSTM_model_params:
-  epochs: 6
-  batch_size: 32
-  learning_rate: 0.001
-  metrics: 'mae'
-  dropout: 0.2
+  val_size: 0.1
+best_preprocessing_lc3:
+  columns:
+  - t1
+  daily_cols:
+  - t1
+  - r1
+  enable_day_of_week_index: true
+  enable_daytime_index: true
+  keep_daily_avg:
+  - true
+  - true
+  - true
+  - true
+  keep_monthly_avg:
+  - true
+  - true
+  - true
+  - true
+  monthly_cols:
+  - r1
+  neg_shifts: -8
+  shifts: 7
+  test_size: 0.2
+  val_size: 0.1
+dataset: loadCurveOneFull
+preprocessing:
+  columns:
+  - t1
+  - r1
+  - holiday
+  - schoolHoliday
+  enable_daytime_index: true
+  keep_daily_avg:
+  - true
+  - true
+  - true
+  - true
+  keep_monthly_avg:
+  - true
+  - true
+  - true
+  - true
+  neg_shifts: -3
+  shifts: 3
+  test_size: 0.2
+  val_size: 0.1
