@@ -123,9 +123,9 @@ def get_parameters_dict_XGBoost():
         "eval_metric": {"value": "mphe"},
         "test_size": {"value": 0.2},
         "shifts": {"min": 0, "max": 10},
-        "load_lag": {"min": 0, "max": 500},
         "neg_shifts": {"min": -10, "max": 0},
         "enable_daytime_index": {"values": [True, False]},
+        "enable_day_of_week_index": {"values": [True, False]},
         "monthly_cols": features[get_dataset()]["monthly_cols"],
         "daily_cols": features[get_dataset()]["daily_cols"],
         "columns": features[get_dataset()]["columns"],
@@ -135,11 +135,12 @@ def get_parameters_dict_XGBoost():
 
 def get_parameters_dict_LSTM():
     parameters_dict_LSTM = {
-        "epochs": {"min": 20, "max": 300},
-        "batch_size": {"values": [1024, 16384]},
-        "learning_rate": {"min": 0.0001, "max": 0.1},
-        "dropout": {"min": 0.01, "max": 0.8},
-        "shifts": {"min": 2, "max": 30},
+        "epochs": {"values": [10, 15]},
+        "batch_size": {"values": [1028, 256]},
+        "learning_rate": {"values": [0.01, 0.1]},
+        "dropout": {"values": [0.1, 0.3]},
+        "shifts": {"values": [8, 4, 2]},
+        "enable_day_of_week_index": {"values": [True, False]},
         "enable_daytime_index": {"values": [True, False]},
         "monthly_cols": features[get_dataset()]["monthly_cols"],
         "daily_cols": features[get_dataset()]["daily_cols"],

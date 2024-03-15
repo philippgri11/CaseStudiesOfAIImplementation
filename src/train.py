@@ -22,17 +22,21 @@ from wandb.integration.xgboost import WandbCallback
 from wandb.keras import WandbCallback as WandbCallbackKeras
 
 import wandb
-from evaluation import evaluate_lstm_model, evaluate_sklearn_model, evaluate_xgb_model
-from load_data import get_data
-from preprocessing import preprocessing, preprocessing_lstm
-from sweep_config import (
+from src.evaluation import (
+    evaluate_lstm_model,
+    evaluate_sklearn_model,
+    evaluate_xgb_model,
+)
+from src.load_data import get_data
+from src.preprocessing import preprocessing, preprocessing_lstm
+from src.sweep_config import (
     get_sweep_ard,
     get_sweep_id_xg_boost,
     get_sweep_k_neighbors,
     getSweepIDLSTM,
 )
 
-max_runs = 31
+max_runs = 1
 
 with open("../params.yaml", "r") as file:
     param = yaml.safe_load(file)
@@ -91,11 +95,13 @@ def trainXGBRegressor():
             "shifts": get_value("shifts", "preprocessing"),
             "neg_shifts": get_value("neg_shifts", "preprocessing"),
             "enable_daytime_index": get_value("enable_daytime_index", "preprocessing"),
+            "enable_day_of_week_index": get_value(
+                "enable_day_of_week_index", "preprocessing"
+            ),
             "monthly_cols": get_value("monthly_cols", "preprocessing"),
             "keep_monthly_avg": get_value("keep_monthly_avg", "preprocessing"),
             "daily_cols": get_value("daily_cols", "preprocessing"),
             "keep_daily_avg": get_value("keep_daily_avg", "preprocessing"),
-            "load_lag": get_value("load_lag", "preprocessing"),
         }
 
         xgb_regressor_model_params = {
@@ -133,6 +139,7 @@ def trainXGBRegressor():
             verbose=True,
             eval_set=[(x_val, y_val)],
             callbacks=[WandbCallback()],
+            early_stopping_rounds=10,
         )
         # save
         path = get_path()
@@ -179,6 +186,9 @@ def trainXGBRegressorWithCV():
             "columns": get_value("columns", "preprocessing"),
             "shifts": get_value("shifts", "preprocessing"),
             "neg_shifts": get_value("neg_shifts", "preprocessing"),
+            "enable_day_of_week_index": get_value(
+                "enable_day_of_week_index", "preprocessing"
+            ),
             "enable_daytime_index": get_value("enable_daytime_index", "preprocessing"),
             "monthly_cols": get_value("monthly_cols", "preprocessing"),
             "keep_monthly_avg": get_value("keep_monthly_avg", "preprocessing"),
@@ -304,7 +314,7 @@ def train_dnn():
         return path
 
 
-def train_lstm(cv=True):
+def train_lstm(cv=False):
     """
     Trains a Long Short-Term Memory (LSTM) model, evaluates the model, logs the evaluation metrics to Weights & Biases, and saves the model.
 
@@ -326,6 +336,9 @@ def train_lstm(cv=True):
             "enable_daytime_index": get_value(
                 "enable_daytime_index", "LSTMpreprocessing"
             ),
+            "enable_day_of_week_index": get_value(
+                "enable_day_of_week_index", "preprocessing"
+            ),
             "monthly_cols": get_value("monthly_cols", "LSTMpreprocessing"),
             "keep_monthly_avg": get_value("keep_monthly_avg", "LSTMpreprocessing"),
             "daily_cols": get_value("daily_cols", "LSTMpreprocessing"),
@@ -340,9 +353,9 @@ def train_lstm(cv=True):
         }
         early_stopping = tf.keras.callbacks.EarlyStopping(
             monitor="loss",
-            patience=3,
+            patience=6,
             verbose=1,
-            min_delta=0.01,
+            min_delta=0.1,
             restore_best_weights=True,
         )
 
@@ -357,16 +370,15 @@ def train_lstm(cv=True):
             data, **lstm_preprocessing
         )
         n_timesteps, n_features = x_train.shape[1], x_train.shape[2]
-        model = build_lstm_model((n_timesteps, n_features))
         if cv:
-            n_splits = 5
+            n_splits = 3
             kf = KFold(n_splits=n_splits, shuffle=False)
 
             fold = 0
             x_train_full = np.concatenate([x_train, x_val], axis=0)
             y_train_full = np.concatenate([y_train, y_val], axis=0)
             mse = 0
-            for train_index, val_index in kf.split(x_train_full):
+            for train_index, val_index in kf.split(x_train_full, y_train_full):
                 print(f"Training fold {fold + 1}/{n_splits}...")
                 x_train_fold, x_val_fold = (
                     x_train_full[train_index],
@@ -398,9 +410,12 @@ def train_lstm(cv=True):
             return None
 
         else:
+            model = build_lstm_model((n_timesteps, n_features), **lstm_model_params)
+            x_train_full = np.concatenate([x_train, x_val], axis=0)
+            y_train_full = np.concatenate([y_train, y_val], axis=0)
             model.fit(
-                x_train,
-                y_train,
+                x_train_full,
+                y_train_full,
                 epochs=lstm_model_params["epochs"],
                 batch_size=lstm_model_params["batch_size"],
                 validation_data=(x_test, y_test),
@@ -418,22 +433,43 @@ def train_lstm(cv=True):
 
 
 def build_lstm_model(input_shape, **params):
+    devices = tf.config.list_physical_devices()
+    print("\nDevices: ", devices)
+
+    gpus = tf.config.list_physical_devices("GPU")
+    if gpus:
+        details = tf.config.experimental.get_device_details(gpus[0])
+        print("GPU details: ", details)
+
     model = tf.keras.models.Sequential(
         [
-            tf.keras.layers.LSTM(64, input_shape=input_shape, return_sequences=True),
-            tf.keras.layers.Dropout(lstm_model_params["dropout"]),
-            tf.keras.layers.LSTM(32),
-            tf.keras.layers.Dropout(lstm_model_params["dropout"]),
+            tf.keras.layers.Bidirectional(
+                tf.keras.layers.LSTM(
+                    512, input_shape=input_shape, return_sequences=True
+                ),
+                merge_mode="concat",
+            ),
+            tf.keras.layers.BatchNormalization(),
+            tf.keras.layers.Dropout(params["dropout"]),
+            tf.keras.layers.Bidirectional(
+                tf.keras.layers.LSTM(256, return_sequences=True), merge_mode="concat"
+            ),
+            tf.keras.layers.BatchNormalization(),
+            tf.keras.layers.LSTM(128),
+            tf.keras.layers.Dense(64, activation="relu"),
             tf.keras.layers.Dense(1),
         ]
     )
-
+    lr_schedule = tf.keras.optimizers.schedules.ExponentialDecay(
+        initial_learning_rate=params["learning_rate"],
+        decay_steps=params["epochs"] / 2,
+        decay_rate=0.5,
+        staircase=False,
+    )
     model.compile(
-        optimizer=tf.keras.optimizers.legacy.Adam(
-            learning_rate=lstm_model_params["learning_rate"]
-        ),
+        optimizer=tf.keras.optimizers.legacy.Adam(learning_rate=lr_schedule),
         loss=tf.keras.losses.Huber(),
-        metrics=lstm_model_params["metrics"],
+        metrics=params["metrics"],
     )
     return model
 
@@ -460,12 +496,14 @@ def train_ard_regressor(cv=True):
             "columns": get_value("columns", "preprocessing"),
             "shifts": get_value("shifts", "preprocessing"),
             "neg_shifts": get_value("neg_shifts", "preprocessing"),
+            "enable_day_of_week_index": get_value(
+                "enable_day_of_week_index", "preprocessing"
+            ),
             "enable_daytime_index": get_value("enable_daytime_index", "preprocessing"),
             "monthly_cols": get_value("monthly_cols", "preprocessing"),
             "keep_monthly_avg": get_value("keep_monthly_avg", "preprocessing"),
             "daily_cols": get_value("daily_cols", "preprocessing"),
             "keep_daily_avg": get_value("keep_daily_avg", "preprocessing"),
-            "load_lag": get_value("load_lag", "preprocessing"),
         }
 
         ard_param = {
@@ -486,7 +524,7 @@ def train_ard_regressor(cv=True):
             cv_sklearn_model(x_train, y_train, x_val, y_val, model)
             return None
         else:
-            model.fit(x_train, y_train)
+            model.fit(pd.concat([x_train, x_val]), pd.concat([y_train, y_val]))
             evaluate_sklearn_model(
                 model=model, given_preprocessing_param=preprocessing_param
             )
@@ -519,12 +557,14 @@ def train_k_neighbors_regressor(cv=True):
             "columns": get_value("columns", "preprocessing"),
             "shifts": get_value("shifts", "preprocessing"),
             "neg_shifts": get_value("neg_shifts", "preprocessing"),
+            "enable_day_of_week_index": get_value(
+                "enable_day_of_week_index", "preprocessing"
+            ),
             "enable_daytime_index": get_value("enable_daytime_index", "preprocessing"),
             "monthly_cols": get_value("monthly_cols", "preprocessing"),
             "keep_monthly_avg": get_value("keep_monthly_avg", "preprocessing"),
             "daily_cols": get_value("daily_cols", "preprocessing"),
             "keep_daily_avg": get_value("keep_daily_avg", "preprocessing"),
-            "load_lag": get_value("load_lag", "preprocessing"),
         }
         k_neighbors_param = {
             "n_neighbors": get_value("n_neighbors", "k_neighbors"),
@@ -542,7 +582,7 @@ def train_k_neighbors_regressor(cv=True):
             cv_sklearn_model(x_train, y_train, x_val, y_val, model)
             return None
         else:
-            model.fit(x_train, y_train)
+            model.fit(pd.concat([x_train, x_val]), pd.concat([y_train, y_val]))
             evaluate_sklearn_model(
                 model=model, given_preprocessing_param=preprocessing_param
             )
@@ -587,10 +627,14 @@ def switch_dataset(dataset: str):
 
 
 if __name__ == "__main__":
-    datasets = ["loadCurveOneFull", "loadCurveTwoFull", "loadCurveThreeFull"]
+    datasets = [
+        "loadCurveOneFull",
+        "loadCurveThreeFull",
+        "loadCurveTwoFull",
+    ]
     for dataset in datasets:
         switch_dataset(dataset)
         wandb.agent(get_sweep_k_neighbors(), train_k_neighbors_regressor)
         wandb.agent(get_sweep_ard(), train_ard_regressor)
         wandb.agent(getSweepIDLSTM(), train_lstm)
-        # wandb.agent(get_sweep_id_xg_boost(), trainXGBRegressorWithCV)
+        wandb.agent(get_sweep_id_xg_boost(), trainXGBRegressorWithCV)

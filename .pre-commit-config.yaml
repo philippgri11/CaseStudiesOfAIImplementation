@@ -1,24 +1,14 @@
 repos:
   - repo: https://github.com/pre-commit/pre-commit-hooks
-    rev: v3.4.0  # Verwende die neueste Version
+    rev: v3.4.0
     hooks:
       - id: trailing-whitespace
       - id: end-of-file-fixer
       - id: check-yaml
-      - id: check-added-large-files
 
   - repo: https://github.com/psf/black
-    rev: 22.3.0  # Verwende die neueste Version von Black
+    rev: 22.3.0
     hooks:
       - id: black
         language_version: python3
         files: ^src/
-
-#  - repo: local
-#    hooks:
-#        - id: update-sphinx-docs
-#          name: Update Sphinx Documentation
-#          entry: ./update_docs.sh
-#          language: script
-#          always_run: true
-#          verbose: true

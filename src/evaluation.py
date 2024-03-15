@@ -8,8 +8,8 @@ from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
 from sklearn.model_selection import KFold, cross_val_score
 
 import wandb
-from load_data import get_data
-from preprocessing import preprocessing, preprocessing_lstm
+from src.preprocessing import preprocessing, preprocessing_lstm
+from src.load_data import get_data
 
 
 def get_param():
@@ -57,7 +57,7 @@ def evaluate_sklearn_model(path=None, model=None, given_preprocessing_param=None
         param = get_param()
         preprocessing_param = get_default_preprocessing_param()
     x_train, y_train, x_val, y_val, x_test, y_test = preprocessing(
-        get_data(param["dataset"]), **preprocessing_param
+        get_data(get_param()["dataset"]), **preprocessing_param
     )
     predicted_labels_test = model.predict(x_test)
     predicted_labels_val = model.predict(x_val)
@@ -133,6 +133,36 @@ def evaluate_lstm_model(
     predicted_labels_val = model.predict(x_val)
     predicted_labels_test = model.predict(x_test)
     return evaluate_model(predicted_labels_test, y_test, predicted_labels_val, y_val)
+
+
+def write_results_to_csv(
+    initial_data, path=None, model=None, given_preprocessing_param=None
+):
+    if model is None:
+        model = xgb.XGBRegressor()
+        model.load_model(path)
+    preprocessingParams = given_preprocessing_param or get_default_preprocessing_param()
+    data = preprocessing(get_data(get_param()["dataset"]), **preprocessingParams)
+    lag_features = initial_data[-given_preprocessing_param["lag"] :].tolist()
+
+    predictions = []
+
+    for i in range(len(data)):
+        # Führe die Vorhersage mit den aktuellen Lag-Features durch
+        row = data[i]
+        row[f"electricLoad_rolling_avg_{given_preprocessing_param['lag']}"] = np.mean(
+            lag_features
+        )
+        prediction = model.predict(row)
+
+        # Füge die Vorhersage zur Liste der Vorhersagewerte hinzu
+        predictions.append(prediction)
+
+        # Aktualisiere die Lag-Features: Entferne den ältesten Wert und füge die neue Vorhersage hinzu
+        lag_features.pop(0)
+        lag_features.append(prediction)
+
+    return predictions
 
 
 def evaluate_xgb_model(path=None, model=None, given_preprocessing_param=None):

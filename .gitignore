@@ -129,3 +129,5 @@ src/wandb/
 /models/
 
 .DS_Store
+
+notebook/wandb/

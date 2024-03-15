@@ -4,7 +4,7 @@ import numpy as np
 import pandas as pd
 from astral import LocationInfo
 from astral.sun import sun
-from sklearn.preprocessing import StandardScaler
+from sklearn.preprocessing import StandardScaler, MinMaxScaler
 
 
 def sliding_window(df, columns, shifts, neg_shifts):
@@ -69,6 +69,7 @@ def preprocessing_lstm(
     val_size=0.1,
     target="electricLoad",
     enable_daytime_index=True,
+    enable_day_of_week_index=True,
     daily_cols=None,
     monthly_cols=None,
     keep_daily_avg=None,
@@ -91,6 +92,8 @@ def preprocessing_lstm(
         The target column in the dataset.
     enable_daytime_index : bool, optional
         If True, calculates and includes the daytime index.
+    enable_day_of_week_index: bool, optional
+        If True, calculates and includes the day of week index.
     daily_cols : list of str, optional
         Columns for which daily differences are calculated.
     monthly_cols : list of str, optional
@@ -108,6 +111,7 @@ def preprocessing_lstm(
     data = common_preprocessing(
         data,
         enable_daytime_index=enable_daytime_index,
+        enable_day_of_week_index=enable_day_of_week_index,
         daily_cols=daily_cols,
         monthly_cols=monthly_cols,
         keep_daily_avg=keep_daily_avg,
@@ -116,12 +120,11 @@ def preprocessing_lstm(
     x_train, y_train, x_val, y_val, x_test, y_test = split_data(
         data, target, test_size=test_size, val_size=val_size
     )
-    x_test_scaler = StandardScaler()
-    x_train_scaler = StandardScaler()
-    x_val_scaler = StandardScaler()
-    x_test = pd.DataFrame(x_test_scaler.fit_transform(x_test.to_numpy()))
-    x_train = pd.DataFrame(x_train_scaler.fit_transform(x_train.to_numpy()))
-    x_val = pd.DataFrame(x_val_scaler.fit_transform(x_val.to_numpy()))
+    scaler = MinMaxScaler()
+    x_train = pd.DataFrame(scaler.fit_transform(x_train))
+
+    x_val = pd.DataFrame(scaler.transform(x_val))
+    x_test = pd.DataFrame(scaler.transform(x_test))
     return (
         prepare_data_lstm(x_train, shifts),
         y_train.iloc[: -shifts + 1],
@@ -181,6 +184,7 @@ def split_data(data, target, test_size, val_size):
 def common_preprocessing(
     data,
     enable_daytime_index=True,
+    enable_day_of_week_index=True,
     daily_cols=None,
     monthly_cols=None,
     keep_daily_avg=None,
@@ -195,6 +199,8 @@ def common_preprocessing(
         The input data.
     enable_daytime_index : bool, optional
         If True, calculates and includes the daytime index.
+    enable_day_of_week_index: bool, optional
+        If True, calculates and includes the day of week index.
     daily_cols : list of str, optional
         Columns for which daily differences are calculated.
     monthly_cols : list of str, optional
@@ -211,6 +217,8 @@ def common_preprocessing(
     """
     if enable_daytime_index:
         data = set_daytime_index(data)
+    if enable_day_of_week_index:
+        data = set_day_of_week(data)
     if monthly_cols is not None:
         data = monthly_diff(data, monthly_cols, keep_monthly_avg)
     if daily_cols is not None:
@@ -249,12 +257,13 @@ def preprocessing(
     columns,
     shifts,
     neg_shifts,
+    enable_day_of_week_index=True,
     enable_daytime_index=True,
     daily_cols=None,
     monthly_cols=None,
     keep_daily_avg=None,
     keep_monthly_avg=None,
-    load_lag=0,
+    split=True,
 ):
     """
     Preprocesses data specifically for XGBoost models, including scaling and feature engineering.
@@ -273,6 +282,8 @@ def preprocessing(
         Number of positive shifts for the sliding window.
     neg_shifts : int
         Number of negative shifts for the sliding window.
+    enable_day_of_week_index: bool, optional
+        If True, calculates and includes the day of week index.
     enable_daytime_index : bool, optional
         If True, calculates and includes the daytime index.
     daily_cols : list of str, optional
@@ -293,6 +304,7 @@ def preprocessing(
     """
     data = common_preprocessing(
         data,
+        enable_day_of_week_index=enable_day_of_week_index,
         enable_daytime_index=enable_daytime_index,
         daily_cols=daily_cols,
         monthly_cols=monthly_cols,
@@ -300,11 +312,37 @@ def preprocessing(
         keep_monthly_avg=keep_monthly_avg,
     )
     data = sliding_window(data, columns, shifts, neg_shifts)
-    print(f"load_lag= {load_lag}")
-    data = add_rolling_average_electric_load(data, "electricLoad", load_lag)
     data = data.dropna()
-    data = split_data(data, "electricLoad", test_size, val_size)
+    if split:
+        data = split_data(data, "electricLoad", test_size, val_size)
     return data
+
+
+def get_day_of_week(row):
+    """
+    Calculates the weekday for a given row based on the date information.
+
+    Parameters
+    ----------
+    row : pd.Series
+        A row of the DataFrame, expected to contain date information.
+
+    Returns
+    -------
+    int
+        An integer representing the weekday, where Monday is 0 and Sunday is 6.
+    """
+    # Erstelle ein datetime Objekt basierend auf dem Datum in der Zeile
+    date = datetime(
+        int(row["startDate_year"]),
+        int(row["startDate_month"]),
+        int(row["startDate_day"]),
+    )
+
+    # Ermittle den Wochentag
+    weekday = date.weekday()
+
+    return weekday
 
 
 def get_daylight_phase(row):
@@ -342,6 +380,11 @@ def get_daylight_phase(row):
         return 3
     else:
         return 4
+
+
+def set_day_of_week(df):
+    df["day_of_week"] = df.apply(get_day_of_week, axis=1)
+    return df
 
 
 def set_daytime_index(df):

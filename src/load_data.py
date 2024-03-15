@@ -2,7 +2,7 @@ import pandas as pd
 
 
 def read_load_curve_to_dataframe(
-    file_path, sep=";", decimal=",", additional_columns=[]
+    file_path, sep=";", decimal=",", additional_columns=[], should_clean_data=True
 ):
     """
     Reads a CSV file containing electric load data and converts it to a DataFrame.
@@ -36,13 +36,15 @@ def read_load_curve_to_dataframe(
         except ValueError:
             continue
 
-    df = df.drop(columns="endDate").dropna()
+    df = df.drop(columns="endDate")
     df = date_to_float(df, ["startDate"])
-    df = clean_data(df)
-    return df.dropna()
+    if should_clean_data:
+        df = clean_data(df)
+        return df.dropna()
+    return df
 
 
-def get_data(dataset):
+def get_data(dataset, should_clean_data=True):
     """
     Fetches and processes data based on the specified dataset type.
 
@@ -57,6 +59,9 @@ def get_data(dataset):
         The processed data merged with holiday information if applicable.
     """
     file_map = {
+        "loadCurveOneTest": "../data/LC1.csv",
+        "loadCurveTwoTest": "../data/LC2.csv",
+        "loadCurveThreeTest": "../data/LC3.csv",
         "loadCurveOne": "../data/training_data_period_1.csv",
         "loadCurveTwo": "../data/training_data_period_2.csv",
         "loadCurveThree": "../data/training_data_period_3.csv",
@@ -77,7 +82,9 @@ def get_data(dataset):
         additional_columns = ["t1", "r1"]
 
     load_curve = read_load_curve_to_dataframe(
-        file_path, additional_columns=additional_columns
+        file_path,
+        additional_columns=additional_columns,
+        should_clean_data=should_clean_data,
     )
 
     holiday = read_holiday_to_dataframe("../data/holiday.csv")
